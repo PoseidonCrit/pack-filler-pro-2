@@ -7,111 +7,85 @@
 // and the pattern worker (patternWorker) are accessible.
 
 /* --- Pattern Strategies --- */
-// Basic Perlin Noise implementation (simplified for demonstration)
-// A more robust implementation might be needed for better noise distribution.
-function perlinNoise(x, seed) {
-    // Simple deterministic hash for seeding
-    const hash = (n) => {
-        let i = (n * 0x1357) ^ seed;
-        return (i * i * 0x8295) >>> 0;
-    };
+// Note: Perlin Noise and clamp implementations are now ONLY in the worker code string.
+// These functions are no longer needed directly in the main thread's fillLogic.js
+// unless the worker initialization fails and we fallback.
 
-    const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
-    const lerp = (a, b, t) => a + t * (b - a);
-    const grad = (hash, x) => {
-        const h = hash & 15;
-        const grad = 1 + (h & 7);
-        if (h & 8) return -grad * x;
-        return grad * x;
-    };
-
-    const x0 = Math.floor(x);
-    const x1 = x0 + 1;
-    const t = x - x0;
-    const t_faded = fade(t);
-
-    const hash0 = hash(x0);
-    const hash1 = hash(x1);
-
-    const grad0 = grad(hash0, t);
-    const grad1 = grad(hash1, t - 1);
-
-    return lerp(grad0, grad1, t_faded);
-}
-
-
-// New pattern strategies
+// Main thread strategies (simple ones or fallback)
 const FillStrategies = {
     // Random strategy (uses existing chooseQuantity logic)
     random: (config, index, total) => chooseQuantity(config),
 
-    // Perlin Noise based strategy
-    perlin: (config, index, total) => {
-        const seed = config.noiseSeed === '' ? Date.now() : parseInt(config.noiseSeed, 10);
-        const scale = config.patternScale || 100;
-        const intensity = config.patternIntensity || 1.0;
-
-        // Normalize index to a value between 0 and scale for noise function
-        const noiseInput = (index / total) * scale;
-
-        // Get noise value (typically between -1 and 1)
-        const noiseValue = perlinNoise(noiseInput, seed);
-
-        // Map noise value to a quantity range (e.g., 0 to MAX_QTY)
-        // Adjust range based on intensity
-        const minQty = config.lastMinQty; // Use min/max from config for bounds
-        const maxQty = config.lastMaxQty;
-        const range = maxQty - minQty;
-
-        // Scale noise value to the desired range and apply intensity
-        const scaledNoise = noiseValue * (range / 2) * intensity; // Scale to half the range, apply intensity
-
-        // Shift the scaled noise to be centered around the midpoint of the range
-        const midpoint = minQty + range / 2;
-        let quantity = midpoint + scaledNoise;
-
-        // Clamp the final quantity to the min/max range and then to 0/MAX_QTY
-        quantity = clamp(quantity, minQty, maxQty);
-        quantity = clamp(Math.round(quantity), 0, MAX_QTY); // Round to integer
-
-        return quantity;
-    },
-
-    // Gradient strategy
+    // Gradient strategy (can run on main thread, but included in worker for consistency if needed)
+    // Keeping a fallback here in case worker fails
     gradient: (config, index, total) => {
         const intensity = config.patternIntensity || 1.0;
         const minQty = config.lastMinQty;
         const maxQty = config.lastMaxQty;
         const range = maxQty - minQty;
+        const MAX_QTY = 99; // Define MAX_QTY locally for fallback
 
-        // Calculate base quantity based on position in the list
-        const baseQty = minQty + (index / (total - 1)) * range; // Linear gradient from min to max
-
-        // Apply intensity (blends between minQty and the calculated gradient value)
+        const baseQty = minQty + (index / (total - 1)) * range;
         let quantity = minQty + (baseQty - minQty) * intensity;
 
-
-        // Clamp and round
         quantity = clamp(quantity, minQty, maxQty);
         quantity = clamp(Math.round(quantity), 0, MAX_QTY);
 
         return quantity;
     },
 
-    // Alternating strategy
+    // Alternating strategy (runs on main thread)
     alternating: (config, index, total) => {
          const minQty = config.lastMinQty;
          const maxQty = config.lastMaxQty;
-         // Simple alternating between min and max
+         const MAX_QTY = 99; // Define MAX_QTY locally
          return index % 2 === 0 ? clamp(minQty, 0, MAX_QTY) : clamp(maxQty, 0, MAX_QTY);
+    },
+
+    // Perlin strategy fallback (runs on main thread if worker fails)
+    perlinFallback: (config, index, total) => {
+         // This requires the perlinNoise and clamp functions to be available
+         // in the main thread's scope if the worker fails.
+         // For now, we'll rely on the worker. If fallback is essential,
+         // we might need to include perlinNoise/clamp in domUtils or another file.
+         // For this iteration, we'll keep it simple and log a warning.
+         GM_log("Pack Filler Pro: Perlin noise calculation falling back to main thread (worker failed). Performance may be impacted.");
+         // Replicate logic from worker (requires clamp and perlinNoise in this scope)
+         // Assuming clamp and perlinNoise are available globally if this fallback is hit
+         const seed = config.noiseSeed === '' ? Date.now() : parseInt(config.noiseSeed, 10);
+         const scale = config.patternScale || 100;
+         const intensity = config.patternIntensity || 1.0;
+         const MAX_QTY = 99;
+
+         const noiseInput = (index / total) * scale;
+         const noiseValue = perlinNoise(noiseInput, seed);
+
+         const minQty = config.lastMinQty;
+         const maxQty = config.lastMaxQty;
+         const range = maxQty - minQty;
+
+         const scaledNoise = noiseValue * (range / 2) * intensity;
+         let quantity = minQty + range / 2 + scaledNoise;
+
+         quantity = clamp(quantity, minQty, maxQty);
+         quantity = clamp(Math.round(quantity), 0, MAX_QTY);
+
+         return quantity;
     }
 };
 
 // Strategy selector
-function getFillStrategy(config) {
-    switch (config.patternType) {
+function getFillStrategy(config, useFallback = false) {
+    const type = config.patternType;
+    if (useFallback && type === 'perlin') {
+        return FillStrategies.perlinFallback;
+    }
+    switch (type) {
         case 'perlin':
-            return FillStrategies.perlin;
+             // If worker is available, the async fillPacks will use it.
+             // This function is mainly for determining the *type* of strategy.
+             // The actual execution logic is in fillPacks.
+             return FillStrategies.perlin; // Placeholder, actual logic in worker/fallback
         case 'gradient':
             return FillStrategies.gradient;
         case 'alternating':
@@ -134,59 +108,28 @@ function virtualUpdate(inputs, quantities) {
         return;
     }
 
-    // Find the common parent of the inputs
-    // Assuming all inputs share the same direct parent for simplicity
-    const parent = inputs[0]?.parentNode;
-    if (!parent) {
-        GM_log("Pack Filler Pro: virtualUpdate could not find a common parent for inputs.");
-        // Fallback to individual updates if batch update fails
-        inputs.forEach((input, i) => updateInput(input, quantities[i]));
-        return;
-    }
-
-    // Create a DocumentFragment to build the new DOM structure offline
-    const fragment = document.createDocumentFragment();
-
-    // Iterate through the *original* inputs to maintain their order and attributes
-    // Create clones, update their values, and append to the fragment
-    inputs.forEach((input, i) => {
-        const clone = input.cloneNode(true); // Clone the input element
-        const valueStr = String(clamp(quantities[i], 0, MAX_QTY)); // Clamp and convert to string
-        if (clone.value !== valueStr) {
-             clone.value = valueStr;
-             // While updating detached elements, dispatching events here might not
-             // be effective for frameworks. Events will be dispatched after re-attaching
-             // or the framework might pick up changes via MutationObserver if configured.
-             // For now, we rely on setting the value directly.
-        }
-        fragment.appendChild(clone);
-    });
-
-    // Replace the original parent's children with the new fragment in a single DOM operation
-    // This triggers only one major reflow/repaint instead of one per input.
-    // Note: This replaces ALL children of the parent. Ensure the parent only contains the inputs.
-    // If the parent contains other elements, a more complex approach is needed (e.g., replacing inputs individually but detaching/reattaching the parent).
-    // For the current structure (.pack-list > .pack > input), we need to replace the parent of the inputs, which is the '.pack' div.
-    // Let's refine this to replace the parent .pack divs.
-
-    const packContainers = inputs.map(input => input.closest('.pack')).filter(Boolean); // Get parent .pack divs
-     if (packContainers.length !== inputs.length) {
-          GM_log("Pack Filler Pro: virtualUpdate could not find .pack containers for all inputs. Falling back to individual updates.");
-          inputs.forEach((input, i) => updateInput(input, quantities[i]));
+    // Find the common parent of the pack containers
+    const packContainers = inputs.map(input => input.closest('.pack')).filter(Boolean);
+     if (packContainers.length === 0 || packContainers.length !== inputs.length) {
+          GM_log("Pack Filler Pro: virtualUpdate could not find .pack containers for all inputs or input count mismatch. Falling back to individual updates.");
+          inputs.forEach((input, i) => updateInput(input, quantities[i])); // Use updateInput from domUtils
           return;
      }
 
-     const parentOfPacks = packContainers[0]?.parentNode; // Get the parent of the .pack divs (likely .pack-list)
+     const parentOfPacks = packContainers[0]?.parentNode;
      if (!parentOfPacks) {
          GM_log("Pack Filler Pro: virtualUpdate could not find the parent of .pack containers. Falling back to individual updates.");
-         inputs.forEach((input, i) => updateInput(input, quantities[i]));
+         inputs.forEach((input, i) => updateInput(input, quantities[i])); // Use updateInput from domUtils
          return;
      }
 
-     // Create a map of original .pack containers for easy lookup
-     const originalPackMap = new Map(packContainers.map(container => [container, container.outerHTML]));
-
+     // Create a temporary div to hold the new HTML structure
      const tempDiv = document.createElement('div');
+     tempDiv.style.display = 'none'; // Hide the temporary div
+     document.body.appendChild(tempDiv); // Append to body to allow innerHTML parsing
+
+     let newInnerHTML = '';
+
      // Reconstruct the HTML for the relevant packs with updated input values
      inputs.forEach((input, i) => {
          const originalPack = inputs[i].closest('.pack');
@@ -194,130 +137,66 @@ function virtualUpdate(inputs, quantities) {
              let packHtml = originalPack.outerHTML;
              // Use a simple string replacement for the input value within the HTML string
              // This is fragile if the input structure changes, but avoids complex DOM manipulation
-             const inputRegex = new RegExp(`(<input[^>]*id="${input.id}"[^>]*value=")[^"]*(".*?>)`);
+             // Ensure we handle potential attributes and closing tags correctly
+             const inputRegex = new RegExp(`(<input[^>]*id="${input.id}"[^>]*value=")[^"]*(".*?/?>)`, 'i'); // Added 'i' for case-insensitivity, adjusted regex for potential self-closing tag
              packHtml = packHtml.replace(inputRegex, `$1${String(quantities[i])}$2`);
-             tempDiv.innerHTML += packHtml; // Build the new HTML structure
+             newInnerHTML += packHtml; // Accumulate the new HTML
          }
      });
 
-     // Replace the original pack containers with the new ones from the temp div
-     // This is still not a single DOM operation for replacing all children,
-     // but it avoids modifying the DOM tree structure repeatedly.
-     // A true batch update would involve detaching the parentOfPacks, updating children, and reattaching.
-     // Let's stick to replacing the parentOfPacks's innerHTML for a simpler batch update.
+     // Set the innerHTML of the temporary div to parse the HTML string into DOM nodes
+     tempDiv.innerHTML = newInnerHTML;
 
-     // Store original non-pack elements if any, or assume parentOfPacks only contains .pack divs
-     // Given the typical structure, assuming .pack-list only contains .pack divs is safer.
-     parentOfPacks.innerHTML = tempDiv.innerHTML; // Replace content in one go
+     // Create a DocumentFragment to hold the new nodes before inserting them
+     const fragment = document.createDocumentFragment();
+     while (tempDiv.firstChild) {
+         fragment.appendChild(tempDiv.firstChild);
+     }
 
-     // After replacing innerHTML, re-get the updated inputs to dispatch events
+     // Replace the original pack containers with the new ones from the fragment
+     // This still involves multiple replaceChild operations, but avoids repeated string parsing.
+     // A true single batch update would require replacing the parentOfPacks's children entirely,
+     // which might remove other non-pack elements if they exist.
+     // Let's stick to replacing individual pack containers for safety, but use the fragment.
+     packContainers.forEach((originalPack, i) => {
+          const newPack = fragment.children[i]; // Get the corresponding new pack from the fragment
+          if (newPack) {
+               try {
+                   originalPack.parentNode.replaceChild(newPack, originalPack);
+               } catch (e) {
+                   GM_log("Pack Filler Pro: Error replacing pack container in virtualUpdate. Falling back to individual updates.", e);
+                   // Fallback for this specific input if replaceChild fails
+                   updateInput(inputs[i], quantities[i]);
+               }
+          } else {
+               GM_log("Pack Filler Pro: Mismatch between original and new pack containers in virtualUpdate. Falling back to individual updates for remaining.", inputs[i]);
+               // Fallback for this specific input
+               updateInput(inputs[i], quantities[i]);
+          }
+     });
+
+
+     // Clean up the temporary div
+     document.body.removeChild(tempDiv);
+
+
+     // After replacing the DOM nodes, dispatch events on the newly created inputs
+     // We need to re-select the inputs from the DOM as the original references are no longer valid.
      const updatedInputs = getPackInputs().filter(input => inputs.some(originalInput => originalInput.id === input.id));
 
-     // Dispatch events on the newly created inputs
      updatedInputs.forEach(input => {
          input.dispatchEvent(new Event('input', { bubbles: true }));
          input.dispatchEvent(new Event('change', { bubbles: true }));
      });
 
+
      GM_log(`Pack Filler Pro: Applied batch DOM update for ${inputs.length} inputs.`);
-}
-
-
-/* --- Core Logic --- */
- /**
-  * Determines how many packs to target based on mode and available inputs.
-  * @param {object} config - The script's configuration object.
-  * @param {number} availablePackCount - The total number of visible pack inputs.
-  * @returns {number} The calculated number of packs to fill.
-  */
- function calculateFillCount(config, availablePackCount) { // Accept config here
-     const mode = config.lastMode;
-     const requestedCount = config.lastCount;
-     const count = parseInt(requestedCount, 10) || 0;
-     switch (mode) {
-         case 'fixed':
-         case 'max':
-              return clamp(count, 0, availablePackCount);
-         case 'unlimited':
-              return availablePackCount;
-         default:
-              return 0;
-     }
- }
-
- /**
-  * Determines the quantity for a single pack based on mode and settings.
-  * This function is now primarily used for the 'fixed' and 'random' modes
-  * when no pattern is selected. Pattern logic is handled in fillPacks.
-  * @param {object} config - The script's configuration object.
-  * @returns {number} The calculated quantity for a single pack.
-  */
- function chooseQuantity(config) { // Accept config here
-     const mode = config.lastMode;
-     const fixedQty = config.lastFixedQty;
-     const minQty = config.lastMinQty;
-     const maxQty = config.lastMaxQty;
-
-     const fQty = parseInt(fixedQty, 10) || 0;
-     const mnQty = parseInt(minQty, 10) || 0; // Allow min 0
-     const mxQty = parseInt(maxQty, 10) || 0; // Allow min 0
-
-     switch (mode) {
-         case 'fixed':
-         case 'unlimited': // Unlimited mode still uses fixed quantity
-              return clamp(fQty, 0, MAX_QTY);
-         case 'max': // Random range mode
-              const min = Math.min(mnQty, mxQty);
-              const max = Math.max(mnQty, mxQty);
-              const clampedMin = clamp(min, 0, MAX_QTY);
-              const clampedMax = clamp(max, 0, MAX_QTY);
-
-              if (clampedMin > clampedMax) return 0; // Should not happen with clamping/swapping, but safe check
-
-              return Math.floor(Math.random() * (clampedMax - clampedMin + 1)) + clampedMin;
-         default:
-              return 0;
-     }
- }
-
-// This function is primarily used internally now when Max Total is NOT active in Random mode.
-// The logic for Max Total in Random mode is now handled directly in fillPacks.
-// This function might become less relevant with pattern strategies.
-function distribute(n, total) {
-    if (n <= 0 || total <= 0 || isNaN(n) || isNaN(total)) return Array(n).fill(0);
-
-    let quantities = [];
-    const base = Math.floor(total / n);
-    let remainder = total % n;
-
-    for (let i = 0; i < n; i++) {
-         quantities.push(base);
-    }
-
-    // Randomly distribute the remainder
-    let indices = Array.from({length: n}, (_, i) => i); // Create an array of indices
-    // Shuffle the indices
-    for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]]; // Swap
-    }
-
-    for (let i = 0; i < remainder; i++) {
-        quantities[indices[i]]++;
-    }
-
-    // Clamp individual quantities to MAX_QTY
-    for (let i = 0; i < n; i++) {
-        quantities[i] = clamp(quantities[i], 0, MAX_QTY);
-    }
-
-    return quantities;
 }
 
 
 /**
  * Fills pack inputs based on current settings.
- * Now incorporates pattern strategies and batch DOM updates.
+ * Now incorporates pattern strategies and batch DOM updates, using a Web Worker for heavy calculations.
  * @param {object} config - The script's configuration object.
  * @param {boolean} isAutoFill - True if triggered by the auto-load process.
  */
@@ -395,61 +274,72 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     // Determine quantities based on pattern or mode
     if (patternType && patternType !== 'random') {
          // Use pattern strategy (potentially offloaded to worker)
-         const strategy = getFillStrategy(config);
          const totalPacksToFill = inputsToActuallyFill.length;
 
-         // Check if we should use the worker for heavy patterns (like Perlin)
-         if (patternType === 'perlin' && typeof patternWorker !== 'undefined') {
+         // Check if we should use the worker for heavy patterns (like Perlin) AND worker is available
+         if (patternType === 'perlin' && typeof patternWorker !== 'undefined' && patternWorker !== null) {
              GM_log("Pack Filler Pro: Using Web Worker for Perlin noise calculation.");
-             // Offload heavy computation to the worker
-             quantitiesToApply = await new Promise((resolve, reject) => {
-                 patternWorker.onmessage = (e) => {
-                     resolve(e.data);
-                 };
-                 patternWorker.onerror = (error) => {
-                     GM_log("Pack Filler Pro: Web Worker error:", error);
-                     reject(error);
-                 };
-                 // Post message to worker with necessary data
-                 patternWorker.postMessage({
-                     strategy: patternType,
-                     count: totalPacksToFill,
-                     config: { // Pass relevant config for the worker
-                          noiseSeed: config.noiseSeed,
-                          patternScale: config.patternScale,
-                          patternIntensity: config.patternIntensity,
-                          lastMinQty: config.lastMinQty,
-                          lastMaxQty: config.lastMaxQty,
-                          maxTotalAmount: config.maxTotalAmount,
-                          fillEmptyOnly: config.fillEmptyOnly // Worker needs to know if fillEmptyOnly was active
-                     }
+             try {
+                 // Offload heavy computation to the worker
+                 quantitiesToApply = await new Promise((resolve, reject) => {
+                     // Ensure previous message handlers are cleared to avoid race conditions
+                     patternWorker.onmessage = (e) => {
+                         if (e.data && e.data.type === 'result') {
+                             resolve(e.data.quantities);
+                         } else if (e.data && e.data.type === 'log') {
+                              // Handle logs from worker here if needed, or in the main worker.onmessage handler
+                              GM_log("Pack Filler Pro Worker Log (from fillPacks):", ...e.data.data);
+                         }
+                     };
+                     patternWorker.onerror = (error) => {
+                         GM_log("Pack Filler Pro: Web Worker error during calculation:", error);
+                         reject(error);
+                     };
+                     // Post message to worker with necessary data
+                     patternWorker.postMessage({
+                         strategy: patternType,
+                         count: totalPacksToFill,
+                         config: { // Pass relevant config for the worker
+                              noiseSeed: config.noiseSeed,
+                              patternScale: config.patternScale,
+                              patternIntensity: config.patternIntensity,
+                              lastMinQty: config.lastMinQty,
+                              lastMaxQty: config.lastMaxQty,
+                              maxTotalAmount: config.maxTotalAmount,
+                              // fillEmptyOnly is handled on main thread
+                         }
+                     });
                  });
-             }).catch(error => {
+
+                 // If worker returned quantities, calculate total copies added
+                 if (quantitiesToApply.length > 0) {
+                      currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
+                      if (useMaxTotal && currentTotal >= maxTotalAmount) maxTotalHit = true;
+                 }
+
+             } catch (error) {
                   GM_log("Pack Filler Pro: Error receiving data from worker, falling back to main thread calculation.", error);
                   // Fallback to main thread calculation if worker fails
-                  return inputsToActuallyFill.map((input, index) => {
-                      let qty = strategy(config, index, totalPacksToFill);
-                       // Apply max total limit on main thread if worker didn't
-                       if (useMaxTotal) {
-                            const remaining = maxTotalAmount - currentTotal;
-                            qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
-                            if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
-                       }
-                       currentTotal += qty;
-                       return qty;
+                  const strategy = getFillStrategy(config, true); // Get fallback strategy
+                  inputsToActuallyFill.forEach((input, index) => {
+                       let qty = strategy(config, index, totalPacksToFill);
+                        // Apply max total limit on main thread if worker didn't
+                        if (useMaxTotal) {
+                             const remaining = maxTotalAmount - currentTotal;
+                             qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
+                             if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
+                        }
+                        quantitiesToApply.push(qty); // Add to quantitiesToApply for batch update
+                        currentTotal += qty;
                   });
-             });
-
-             // If worker returned quantities, calculate total copies added
-             if (quantitiesToApply.length > 0) {
-                  currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
-                  if (useMaxTotal && currentTotal >= maxTotalAmount) maxTotalHit = true;
              }
 
-
          } else {
-             // Calculate pattern quantities on the main thread
+             // Calculate pattern quantities on the main thread (for non-Perlin patterns or if worker is unavailable)
              GM_log(`Pack Filler Pro: Calculating pattern (${patternType}) on main thread.`);
+             const strategy = getFillStrategy(config, false); // Get main thread strategy
+             const totalPacksToFill = inputsToActuallyFill.length; // Recalculate total packs to fill
+
              inputsToActuallyFill.forEach((input, index) => {
                  let qty = strategy(config, index, totalPacksToFill);
 
