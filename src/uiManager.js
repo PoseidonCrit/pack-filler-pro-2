@@ -180,8 +180,7 @@ function updatePanelModeDisplay(mode) {
 function updatePatternParamsDisplay(patternType) {
      const isPerlin = patternType === 'perlin';
      const isGradient = patternType === 'gradient';
-     const isAlternating = patternType === 'alternating';
-     const isRandom = patternType === 'random'; // Random has no specific params
+     // const isAlternating = patternType === 'alternating'; // Alternating has no specific params
 
      // Hide all pattern specific params initially
      $(`#${PATTERN_PARAMS_DIV_ID} .pfp-form-group`).hide();
@@ -194,10 +193,8 @@ function updatePatternParamsDisplay(patternType) {
      } else if (isGradient) {
           $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_INTENSITY_INPUT_ID}`).closest('.pfp-form-group').show();
           $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_SCALE_INPUT_ID}`).closest('.pfp-form-group').show(); // Scale can affect gradient smoothness
-     } else if (isAlternating) {
-          // Alternating currently has no specific parameters in the UI
      }
-     // Random has no specific parameters to show
+     // Random and Alternating have no specific parameters to show
 }
 
 
@@ -323,6 +320,7 @@ function updateConfigFromUI(config) { // Accept config here
 
 
     // Ensure quantities are within valid bounds after reading
+    // Assumes clamp is available globally from domUtils.js
     config.lastFixedQty = clamp(config.lastFixedQty, 0, MAX_QTY);
     config.lastMinQty = clamp(config.lastMinQty, 0, MAX_QTY);
     config.lastMaxQty = clamp(config.lastMaxQty, 0, MAX_QTY);
