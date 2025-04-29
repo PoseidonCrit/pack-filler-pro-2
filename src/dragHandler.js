@@ -1,74 +1,91 @@
-// This file provides helper functions for displaying SweetAlert2 modals and toasts.
-// It relies on the SweetAlert2 library (window.Swal), which is assumed to be
+// This file provides the drag and snap functionality for the UI panel.
+// It relies on the interactjs library (window.interact), which is assumed to be
 // loaded via @require in the main script.
-// It also assumes 'config' (specifically config.isDarkMode) is available
-// from the main script's scope.
+// It assumes 'panelElement' and 'config' are available from the main script's scope,
+// and 'updatePanelVisibility' from src/uiManager.js is available via @require.
 
-/* --- SweetAlert2 Custom Alerts --- */
-// Function to show a standard SweetAlert2 modal
-function SWAL_ALERT(title, html, icon = 'info') {
-    // Assumes window.Swal is available via @require in main script
-    if (typeof window.Swal === 'undefined') {
-        GM_log(`SweetAlert2 not available. Falling back to alert: ${title} - ${html}`); // Assumes GM_log is available
-        alert(`${title}\n\n${html}`); // Fallback if Swal is missing
-        return;
-    }
-    window.Swal.fire({
-        title: title,
-        html: html,
-        icon: icon,
-        confirmButtonText: 'OK',
-        customClass: { // Apply custom classes for styling
-            popup: 'pfp-swal-popup',
-            title: 'pfp-swal-title',
-            htmlContainer: 'pfp-swal-html',
-            confirmButton: 'mini primary' // Use mini.css/custom button style
-        },
-        buttonsStyling: false, // Required to use custom button class
-        didOpen: (popup) => {
-            // Apply dark mode class to the Swal popup if the panel is in dark mode
-            // Assumes 'config' is available from the main script's scope
-            if (config.isDarkMode) {
-                popup.classList.add('dark-mode');
-            } else {
-                 popup.classList.remove('dark-mode');
-            }
-        }
-    });
-}
+/* --- Drag Functionality (Adapted) --- */
+// Initializes drag and snap functionality for the panel header.
+// Assumes panelEl is the main panel DOM element.
+function initDrag(panelEl) {
+    // Assumes window.interact is available via @require in main script
+    if (typeof window.interact === 'undefined' || !panelEl) {
+        GM_log("Pack Filler Pro: interactjs library not available or panel not found. Drag functionality disabled."); // Assumes GM_log is available
+        return;
+    }
+    GM_log("Pack Filler Pro: Initializing drag functionality.");
 
- // Function to show a SweetAlert2 toast notification
-function SWAL_TOAST(title, icon = 'info') {
-    // Assumes window.Swal is available via @require in main script
-    if (typeof window.Swal === 'undefined') {
-         GM_log(`SweetAlert2 not available. Falling back to toast log: ${title}`); // Assumes GM_log is available
-         return;
-    }
-    window.Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-         customClass: { // Apply custom classes for styling
-             popup: 'pfp-swal-toast-popup'
-         },
-         didOpen: (toast) => {
-             toast.addEventListener('mouseenter', window.Swal.stopTimer);
-             toast.addEventListener('mouseleave', window.Swal.resumeTimer);
-             // Apply dark mode class to the Swal toast if the panel is in dark mode
-             // Assumes 'config' is available from the main script's scope
-             if (config.isDarkMode) {
-                 toast.classList.add('dark-mode');
-             } else {
-                  toast.classList.remove('dark-mode');
-             }
-         }
-    }).fire({
-        icon: icon,
-        title: title
-    });
-}
+    window.interact('.pfp-header').draggable({
+        inertia: true,
+        autoScroll: true,
+        // Note: interactjs handles its own touch/pointer events and uses preventDefault
+        // internally for drag behavior, so passive: true is not applicable here
+        // without breaking the drag functionality.
+        listeners: {
+            move (event) {
+                const target = panelEl;
+                const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+                target.setAttribute('data-x', x);
+                target.setAttribute('data-y', y);
+
+                // Clear position styles during drag to rely solely on transform
+                target.style.right = 'auto';
+                target.style.left = 'auto';
+                target.style.top = 'auto';
+                target.style.bottom = 'auto';
+            },
+            end (event) {
+                const target = panelEl;
+                const rect = target.getBoundingClientRect();
+                const finalLeft = rect.left;
+                const finalTop = rect.top;
+                const finalBottom = window.innerHeight - rect.bottom;
+
+
+                target.style.transform = 'none';
+                target.removeAttribute('data-x');
+                target.removeAttribute('data-y');
+
+                // Snap logic: Snap to left/right, keep vertical position relative to nearest edge (top/bottom)
+                const windowWidth = window.innerWidth;
+                const panelWidth = target.offsetWidth;
+                const snapThresholdX = windowWidth * 0.5; // Snap left/right based on horizontal center
+
+                let snappedPos = {};
+
+                // Snap left or right
+                if (finalLeft + panelWidth / 2 > snapThresholdX) {
+                    snappedPos.right = '16px';
+                    snappedPos.left = 'auto';
+                } else {
+                    snappedPos.left = '16px';
+                    snappedPos.right = 'auto';
+                }
+
+                // Snap top or bottom based on which edge is closer
+                const snapThresholdY = window.innerHeight * 0.5; // Snap top/bottom based on vertical center
+                const panelHeight = target.offsetHeight;
+
+                if (finalTop + panelHeight / 2 > snapThresholdY) {
+                     // Closer to the bottom edge
+                     snappedPos.bottom = `${Math.max(16, finalBottom)}px`; // Snap to 16px from bottom, ensure >= 16
+                     snappedPos.top = 'auto';
+                } else {
+                     // Closer to the top edge
+                     snappedPos.top = `${Math.max(16, finalTop)}px`; // Snap to 16px from top, ensure >= 16
+                     snappedPos.bottom = 'auto';
+                }
+
+
+                    updatePanelVisibility(config.panelVisible, snappedPos); // Uses updatePanelVisibility from src/uiManager.js and 'config'
+                    GM_log(`Pack Filler Pro: Panel drag ended. Position: ${JSON.stringify(config.panelPos)}`);
+                }
+            }
+        }).allowFrom('.pfp-header');
+    }
 
 // Note: No IIFE wrapper needed in this file if the main script uses one,
 // as the functions defined here will be added to the main script's scope.
