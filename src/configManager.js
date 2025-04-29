@@ -1,4 +1,4 @@
-// This block handles loading, saving, and managing the script's configuration.
+// This file handles loading, saving, and managing the script's configuration.
 // It relies on GM_getValue and GM_setValue from the UserScript API.
 // In a modular setup, this could be a 'configManager.js' module.
 
@@ -23,6 +23,12 @@ function loadConfig() {
                      cfg.panelPos = { ...DEFAULT_CONFIG.panelPos };
                      GM_log("Pack Filler Pro: Migrated panel position to default top/right.");
                  }
+                 // Add migration logic for version 13 if needed (e.g., if scrollToBottomAfterLoad wasn't in older saves)
+                 if (parsed.version < 13 && typeof cfg.scrollToBottomAfterLoad === 'undefined') {
+                      cfg.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
+                      GM_log("Pack Filler Pro: Migrated config to include scrollToBottomAfterLoad.");
+                 }
+
             } else if (parsed.version > DEFAULT_CONFIG.version) {
                  GM_log(`Pack Filler Pro: Saved config version (${parsed.version}) is newer than script version (${DEFAULT_CONFIG.version}). Using default config.`);
                  cfg = { ...DEFAULT_CONFIG }; // Use defaults if saved is newer
