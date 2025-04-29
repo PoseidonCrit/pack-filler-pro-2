@@ -2,8 +2,9 @@
 // It relies on GM_getValue and GM_setValue from the UserScript API.
 // In a modular setup, this could be a 'configManager.js' module.
 
-// Assumes 'config', 'DEFAULT_CONFIG', 'CONFIG_KEY', and GM_* functions are accessible
+// Assumes 'DEFAULT_CONFIG', 'CONFIG_KEY', and GM_* functions are accessible
 // (either globally or imported).
+// Note: This module no longer assumes a global 'config' variable is available for saving.
 
 /* --- Configuration Management --- */
 function loadConfig() {
@@ -68,20 +69,24 @@ function loadConfig() {
      // Always set the version to the current script version for saving
      cfg.version = DEFAULT_CONFIG.version;
      GM_log("Pack Filler Pro: Exiting loadConfig, returning:", cfg); // Debugging log
-     return cfg;
+     return cfg; // Return the loaded/default config object
 }
 
-function saveConfig() {
+/**
+ * Saves the provided config object.
+ * @param {object} configToSave - The config object to save.
+ */
+function saveConfig(configToSave) {
     // Ensure version is always saved correctly
-    // Add a check here to make sure config is not undefined before trying to set version
-    if (!config) {
-         GM_log("Pack Filler Pro: saveConfig called but config is undefined. Aborting save."); // Debugging log
-         return; // Abort save if config is undefined
+    // Add a check here to make sure configToSave is not undefined
+    if (!configToSave) {
+         GM_log("Pack Filler Pro: saveConfig called but configToSave is undefined. Aborting save."); // Debugging log
+         return; // Abort save if configToSave is undefined
     }
 
-    config.version = DEFAULT_CONFIG.version;
+    configToSave.version = DEFAULT_CONFIG.version; // Use the passed config object
     try {
-        const configString = JSON.stringify(config);
+        const configString = JSON.stringify(configToSave);
         GM_log(`Pack Filler Pro: Attempting to save config. Key: ${CONFIG_KEY}, Data: ${configString}`); // Added logging
         GM_setValue(CONFIG_KEY, configString);
         GM_log("Pack Filler Pro: Config saved successfully."); // Added success logging
@@ -90,19 +95,23 @@ function saveConfig() {
     }
 }
 
-// Debounce saving to avoid excessive writes on input changes
+/**
+ * Debounces saving of the provided config object.
+ * @param {object} configToSave - The config object to save.
+ */
 const debouncedSaveConfig = (function() {
     let timer;
-    return function() {
+    return function(configToSave) { // Accept config object here
         clearTimeout(timer);
-        // Add a check here to make sure config is not undefined before scheduling save
-        if (config) {
+        // Add a check here to make sure configToSave is not undefined before scheduling save
+        if (configToSave) {
              GM_log("Pack Filler Pro: Debounced save scheduled."); // Debugging log
-             timer = setTimeout(saveConfig, 500); // Save after 500ms of no changes
+             timer = setTimeout(() => saveConfig(configToSave), 500); // Pass configToSave to saveConfig
         } else {
-             GM_log("Pack Filler Pro: Debounced save called but config is undefined. Not scheduling save."); // Debugging log
+             GM_log("Pack Filler Pro: Debounced save called but configToSave is undefined. Not scheduling save."); // Debugging log
         }
     };
 })();
 
-// Assumes 'config' is updated elsewhere before calling debouncedSaveConfig.
+// The functions loadConfig, saveConfig, and debouncedSaveConfig are made available
+// to the main script's scope via @require.
