@@ -1,13 +1,14 @@
-// This block contains the HTML structure and CSS styles for the UI panel and toggle button.
-// In a modular setup, this could be 'uiHtml.js' and 'uiCss.js', or combined.
+// This file contains the HTML structure and CSS styles for the UI panel and toggle button.
 // Styles are added using GM_addStyle.
-
-// Assumes GM_addStyle and MAX_QTY are accessible.
-// Assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
+// It assumes GM_addStyle and MAX_QTY are available from the main script's scope
+// or src/constants.js via @require.
+// It also assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID
-// are accessible constants.
+// are available from src/constants.js via @require.
 
 /* --- UI Panel HTML --- */
+// HTML string for the main panel structure.
+// Uses constants from src/constants.js
 const panelHTML = `
       <div id="${PANEL_ID}" class="pfp-panel">
         <div class="pfp-header" title="Drag to move panel">
@@ -98,6 +99,8 @@ const panelHTML = `
       </div>
     `;
 
+// HTML string for the toggle button.
+// Uses TOGGLE_BUTTON_ID from src/constants.js
 const panelToggleHTML = `
      <button id="${TOGGLE_BUTTON_ID}" class="pfp-toggle-button" title="Toggle Pack Filler Pro Panel">
          🎴
@@ -105,8 +108,9 @@ const panelToggleHTML = `
 `;
 
 /* --- UI Panel CSS --- */
-// This function adds the necessary CSS styles to the page.
-// It uses GM_addStyle from the UserScript API.
+// This function adds the necessary CSS styles to the page using GM_addStyle.
+// It assumes GM_addStyle and GM_info are available from the main script's scope.
+// It uses various CSS variables for theming.
 function addPanelCSS() {
     GM_addStyle(`
         /* --- mini.css base (subset used for Swal buttons) --- */
@@ -119,11 +123,11 @@ function addPanelCSS() {
         }
         button.mini:hover { text-decoration: none; }
 
-        button.mini.primary { color: #fff; background-color: #007bff; border-color: #007bff; }
-        button.mini.primary:hover { background-color: #0056b3; border-color: #004099; }
+        button.mini.primary { color: #fff; background-color: var(--pfp-swal-button-primary-color); border-color: var(--pfp-swal-button-primary-color); }
+        button.mini.primary:hover { background-color: var(--pfp-swal-button-primary-hover); border-color: var(--pfp-swal-button-primary-hover); }
 
-         button.mini.secondary { color: #fff; background-color: #6c757d; border-color: #6c757d; }
-          button.mini.secondary:hover { background-color: #545b62; border-color: #4a5258; }
+         button.mini.secondary { color: var(--pfp-secondary-text); background-color: var(--pfp-swal-button-secondary-color); border-color: var(--pfp-swal-button-secondary-color); }
+          button.mini.secondary:hover { background-color: var(--pfp-swal-button-secondary-hover); border-color: var(--pfp-swal-button-secondary-hover); }
 
 
         :root { /* CSS Variables for theming */
@@ -188,7 +192,7 @@ function addPanelCSS() {
             --pfp-checkbox-checked-border: var(--pfp-secondary-color);
             --pfp-checkbox-checked-check: #000;
             --pfp-range-border: rgba(255, 255, 255, 0.1);
-            --pfp-range-bg: rgba(255, 255, 255, 0.05);
+            --pfp-range-bg: rgba(0, 0, 0, 0.05);
              --pfp-swal-button-primary-color: var(--pfp-primary-color);
              --pfp-swal-button-primary-hover: var(--pfp-primary-hover);
              --pfp-swal-button-secondary-color: var(--pfp-secondary-color);
@@ -536,7 +540,7 @@ function addPanelCSS() {
             color: var(--pfp-secondary-text) !important;
         }
         .swal2-actions button.mini.secondary:hover {
-            background-color: var(--pfp-secondary-hover) !important; border-color: var(--pfp-secondary-hover) !important;
+            background-color: var(--pfp-swal-button-secondary-hover) !important; border-color: var(--pfp-swal-button-secondary-hover) !important;
         }
 
 
@@ -562,5 +566,5 @@ function addPanelCSS() {
         `);
 }
 
-// Assumes these HTML strings and the addPanelCSS function will be used during initialization
-// to add the UI elements and styles to the page.
+// Note: No IIFE wrapper needed in this file if the main script uses one,
+// as the functions and constants defined here will be added to the main script's scope.
