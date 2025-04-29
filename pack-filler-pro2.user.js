@@ -111,7 +111,7 @@
              return; // Stop initialization if config is bad
         }
 
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Dark Mode: ${config.isDarkMode}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}`);
+        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Dark Mode: ${config.isDarkMode}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}`);
 
         // 3. Add CSS
         // Calls the addPanelCSS function from src/uiCss.js
