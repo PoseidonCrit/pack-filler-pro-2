@@ -1,20 +1,13 @@
 // This file provides the drag and snap functionality for the UI panel.
 // It relies on the interactjs library (window.interact), which is assumed to be
 // loaded via @require in the main script.
-// Note: This module now accepts the 'config' object and calls updatePanelVisibility with it.
-
-// It assumes 'panelElement' from the main script's scope,
+// It assumes 'panelElement' and 'config' are available from the main script's scope,
 // and 'updatePanelVisibility' from src/uiManager.js is available via @require.
 
 /* --- Drag Functionality (Adapted) --- */
 // Initializes drag and snap functionality for the panel header.
 // Assumes panelEl is the main panel DOM element.
-/**
- * Initializes drag and snap functionality for the panel header.
- * @param {object} config - The script's configuration object.
- * @param {HTMLElement} panelEl - The main panel DOM element.
- */
-function initDrag(config, panelEl) { // Accept config here
+function initDrag(panelEl) {
     // Assumes window.interact is available via @require in main script
     if (typeof window.interact === 'undefined' || !panelEl) {
         GM_log("Pack Filler Pro: interactjs library not available or panel not found. Drag functionality disabled."); // Assumes GM_log is available
@@ -87,11 +80,12 @@ function initDrag(config, panelEl) { // Accept config here
                 }
 
 
-                    updatePanelVisibility(config, config.panelVisible, snappedPos); // Pass config
+                    updatePanelVisibility(config.panelVisible, snappedPos); // Uses updatePanelVisibility from src/uiManager.js and 'config'
                     GM_log(`Pack Filler Pro: Panel drag ended. Position: ${JSON.stringify(config.panelPos)}`);
                 }
             }
         }).allowFrom('.pfp-header');
     }
 
-// The function initDrag is made available to the main script's scope via @require.
+// Note: No IIFE wrapper needed in this file if the main script uses one,
+// as the functions defined here will be added to the main script's scope.
