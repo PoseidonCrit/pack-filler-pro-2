@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         🎴F105.25 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.26 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.25
-// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling.
+// @version      🎴F105.26
+// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -23,6 +23,7 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
+// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js 
 
 // ==/UserScript==
 
@@ -36,36 +37,11 @@
 
     // Declare variables that will be populated during initialization.
     // 'config' is declared here and will hold the loaded configuration object.
-    let config;
-    let panelElement; // Will be populated after adding panel HTML
-    let toggleButtonElement; // Will be populated after adding toggle button HTML
-    let panelSimpleBarInstance = null; // Will be populated if SimpleBar is used and available
+    // panelElement, toggleButtonElement, panelSimpleBarInstance are also declared here.
+    // These are declared in constants.js now and will be available here.
 
-    // Assumes constants like $, SELECTOR, MAX_QTY, PANEL_ID, etc.
-    // are defined in src/constants.js and available here due to @require.
-
-    // Assumes functions like loadConfig, saveConfig, debouncedSaveConfig
-    // are defined in src/configManager.js and available here due to @require.
-
-    // Assumes functions like getPackInputs, clamp, updateInput, clearAllInputs
-    // are defined in src/domUtils.js and available here due to @require.
-
-    // Assumes functions like SWAL_ALERT, SWAL_TOAST
-    // are defined in src/swalHelpers.js and available here due to @require.
-
-    // Assumes functions like calculateFillCount, chooseQuantity, distribute, fillPacks
-    // are defined in src/fillLogic.js and available here due to @require.
-
-    // Assumes functions like loadFullPageIfNeeded
-    // are defined in src/pageLoader.js and available here due to @require.
-
-    // Assumes functions like addPanelCSS, panelHTML, panelToggleHTML
-    // are defined in src/uiCss.js and available here due to @require.
-
-    // Assumes functions like bindPanelEvents, updatePanelModeDisplay, updatePanelVisibility,
-    // loadConfigIntoUI, updateConfigFromUI, applyDarkMode
-    // are defined in src/uiManager.js and available here due to @require.
-
+    // Declare the Web Worker instance
+    let patternWorker;
 
     /* --- Initialize Script --- */
     // This function orchestrates the startup of the script.
@@ -89,8 +65,47 @@
         }
         GM_log("Pack Filler Pro: Essential libraries (cash-dom, SweetAlert2) found.");
 
+        // 2. Initialize Web Worker
+        // Check if the Worker class is available and if the worker script was loaded via @require.
+        // Note: @require for workers might behave differently across UserScript managers.
+        // A more robust approach might involve dynamically creating the worker from a Blob.
+        // For now, assuming @require makes the worker code available globally under the filename.
+        if (typeof Worker !== 'undefined' && typeof patternWorker_js !== 'undefined') {
+            try {
+                 // Assuming patternWorker_js contains the worker code as a string or function
+                 // A common pattern is to wrap the worker code in a function and convert it to a Blob URL
+                 const workerCode = `(${patternWorker_js})();`; // Assuming patternWorker_js is the function wrapping worker code
+                 const blob = new Blob([workerCode], { type: 'application/javascript' });
+                 const blobUrl = URL.createObjectURL(blob);
+                 patternWorker = new Worker(blobUrl);
+                 GM_log("Pack Filler Pro: Web Worker initialized successfully.");
 
-        // 2. Load Configuration
+                 // Listen for logs from the worker if implemented
+                 patternWorker.onmessage = (e) => {
+                      if (e.data && e.data.type === 'log') {
+                           GM_log("Pack Filler Pro Worker Log:", ...e.data.data);
+                      }
+                      // Handle other worker messages in fillLogic.js
+                 };
+
+                 patternWorker.onerror = (error) => {
+                      GM_log("Pack Filler Pro: Web Worker failed to initialize or encountered an error.", error);
+                      // Handle worker errors, potentially disable pattern features or show a warning
+                      SWAL_TOAST('Pattern Worker Error: Pattern features may be disabled.', 'error', config); // Use config if available
+                 };
+
+            } catch (e) {
+                 GM_log("Pack Filler Pro: Failed to initialize Web Worker.", e);
+                 patternWorker = null; // Ensure worker is null if initialization fails
+                 SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config); // Use config if available
+            }
+        } else {
+            GM_log("Pack Filler Pro: Web Worker API or patternWorker.js not available. Pattern features will run on main thread.");
+            patternWorker = null; // Ensure worker is null if not supported/loaded
+        }
+
+
+        // 3. Load Configuration
         GM_log("Pack Filler Pro: Attempting to load config."); // Debugging log
         // Calls the loadConfig function from src/configManager.js
         // Assign the returned config object to the 'config' variable in this scope.
@@ -106,13 +121,13 @@
              return; // Stop initialization if config is bad
         }
 
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}`);
+        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}, Pattern Type: ${config.patternType}, Pattern Scale: ${config.patternScale}, Pattern Intensity: ${config.patternIntensity}`);
 
-        // 3. Add CSS
+        // 4. Add CSS
         // Calls the addPanelCSS function from src/uiCss.js
         addPanelCSS();
 
-        // 4. Add Panel HTML to DOM and get element references
+        // 5. Add Panel HTML to DOM and get element references
         // Uses panelHTML and panelToggleHTML from src/uiCss.js
         document.body.insertAdjacentHTML('beforeend', panelHTML);
         document.body.insertAdjacentHTML('beforeend', panelToggleHTML);
@@ -138,7 +153,7 @@
         GM_log("Pack Filler Pro: UI elements added to DOM.");
 
 
-        // 5. Initialize SimpleBar (Custom Scrollbar - Optional)
+        // 6. Initialize SimpleBar (Custom Scrollbar - Optional)
         // Check if SimpleBar library is available before initializing.
         const panelBodyEl = panelElement.querySelector('.pfp-body');
         if (panelBodyEl && typeof window.SimpleBar !== 'undefined') {
@@ -150,7 +165,7 @@
         }
 
 
-        // 6. Apply Initial Configuration to UI and State
+        // 7. Apply Initial Configuration to UI and State
         // Calls functions from src/uiManager.js, passing the config object
         loadConfigIntoUI(config); // Pass config here
         updatePanelModeDisplay(config.lastMode); // Pass mode from config
@@ -159,14 +174,9 @@
         applyDarkMode(config, config.isDarkMode); // Apply dark mode based on loaded config
 
 
-        // 7. Bind Events
+        // 8. Bind Events
         // Calls the bindPanelEvents function from src/uiManager.js, passing the config object
         bindPanelEvents(config); // Pass config here
-
-
-        // 8. Initialize Drag Functionality (Removed)
-        // Removed the check for interactjs and the call to initDrag.
-        GM_log("Pack Filler Pro: Drag functionality disabled.");
 
 
         // 9. Trigger Auto-load Full Page if enabled
@@ -194,4 +204,22 @@
     // This is the actual trigger that starts the script's logic after the page loads.
     document.addEventListener('DOMContentLoaded', init);
 
+    // Clean up the worker when the script is unloaded (e.g., page navigation)
+    window.addEventListener('beforeunload', () => {
+        if (patternWorker) {
+            patternWorker.terminate();
+            GM_log("Pack Filler Pro: Web Worker terminated.");
+        }
+         // Disconnect MutationObservers if they are stored globally
+         if (window._pfpSwalObserver) {
+              window._pfpSwalObserver.disconnect();
+              delete window._pfpSwalObserver;
+              GM_log("Pack Filler Pro: SweetAlert2 popup observer disconnected.");
+         }
+         // Add disconnection for the main input observer if stored globally
+         // (Currently, the main input observer is local to bindPanelEvents, might need adjustment)
+    });
+
+
 })(); // End of IIFE
+
