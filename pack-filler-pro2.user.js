@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         🎴F105.28 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.27 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.28
+// @version      🎴F105.27
 // @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
@@ -13,7 +13,6 @@
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js
 // @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js
-// // @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js 
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/configManager.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/domUtils.js
@@ -22,7 +21,11 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js 
+// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js
+// ==/UserScript==
+
+// Optional dependency (commented out for now):
+// @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js
 
 // ==/UserScript==
 
