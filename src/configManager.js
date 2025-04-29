@@ -7,13 +7,21 @@
 
 /* --- Configuration Management --- */
 function loadConfig() {
+    GM_log("Pack Filler Pro: Entering loadConfig function."); // Debugging log
     const raw = GM_getValue(CONFIG_KEY);
+    GM_log("Pack Filler Pro: GM_getValue returned raw data:", raw); // Debugging log
+
     let cfg = { ...DEFAULT_CONFIG }; // Start with defaults
+
     if (raw) {
         try {
             const parsed = JSON.parse(raw);
+            GM_log("Pack Filler Pro: Parsed config data:", parsed); // Debugging log
+
             // Merge fields from saved config onto defaults
             cfg = { ...cfg, ...parsed };
+             GM_log("Pack Filler Pro: Merged config with defaults:", cfg); // Debugging log
+
 
             // Handle specific migrations if config version is old
             if (parsed.version < DEFAULT_CONFIG.version) {
@@ -28,6 +36,13 @@ function loadConfig() {
                       cfg.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
                       GM_log("Pack Filler Pro: Migrated config to include scrollToBottomAfterLoad.");
                  }
+                 // Ensure new defaults are applied if migrating from a version without the field
+                 Object.keys(DEFAULT_CONFIG).forEach(key => {
+                      if (typeof cfg[key] === 'undefined') {
+                           cfg[key] = DEFAULT_CONFIG[key];
+                      }
+                 });
+
 
             } else if (parsed.version > DEFAULT_CONFIG.version) {
                  GM_log(`Pack Filler Pro: Saved config version (${parsed.version}) is newer than script version (${DEFAULT_CONFIG.version}). Using default config.`);
@@ -43,17 +58,27 @@ function loadConfig() {
              });
 
         } catch (e) {
-            GM_log("Error loading Pack Filler Pro config, using defaults.", e);
+            GM_log("Error loading Pack Filler Pro config, using defaults.", e); // Debugging log
              cfg = { ...DEFAULT_CONFIG }; // Use defaults on parse error
         }
+    } else {
+         GM_log("Pack Filler Pro: No saved config found, using defaults."); // Debugging log
     }
+
      // Always set the version to the current script version for saving
      cfg.version = DEFAULT_CONFIG.version;
+     GM_log("Pack Filler Pro: Exiting loadConfig, returning:", cfg); // Debugging log
      return cfg;
 }
 
 function saveConfig() {
     // Ensure version is always saved correctly
+    // Add a check here to make sure config is not undefined before trying to set version
+    if (!config) {
+         GM_log("Pack Filler Pro: saveConfig called but config is undefined. Aborting save."); // Debugging log
+         return; // Abort save if config is undefined
+    }
+
     config.version = DEFAULT_CONFIG.version;
     try {
         const configString = JSON.stringify(config);
@@ -70,7 +95,13 @@ const debouncedSaveConfig = (function() {
     let timer;
     return function() {
         clearTimeout(timer);
-        timer = setTimeout(saveConfig, 500); // Save after 500ms of no changes
+        // Add a check here to make sure config is not undefined before scheduling save
+        if (config) {
+             GM_log("Pack Filler Pro: Debounced save scheduled."); // Debugging log
+             timer = setTimeout(saveConfig, 500); // Save after 500ms of no changes
+        } else {
+             GM_log("Pack Filler Pro: Debounced save called but config is undefined. Not scheduling save."); // Debugging log
+        }
     };
 })();
 
