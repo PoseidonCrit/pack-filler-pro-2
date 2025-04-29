@@ -1,12 +1,13 @@
-// This block handles loading, saving, and managing the script's configuration.
-// It relies on GM_getValue and GM_setValue from the UserScript API.
-// In a modular setup, this could be a 'configManager.js' module.
-
-// Assumes 'config', 'DEFAULT_CONFIG', 'CONFIG_KEY', and GM_* functions are accessible
-// (either globally or imported).
+// This file handles loading, saving, and managing the script's configuration.
+// It relies on GM_getValue and GM_setValue from the UserScript API,
+// and the 'config', 'DEFAULT_CONFIG', and 'CONFIG_KEY' variables
+// which are assumed to be defined in src/constants.js and available via @require.
 
 /* --- Configuration Management --- */
+// Loads the configuration from storage or uses defaults.
 function loadConfig() {
+    // Assumes GM_getValue and CONFIG_KEY are available from the main script's scope
+    // and DEFAULT_CONFIG is available from src/constants.js via @require.
     const raw = GM_getValue(CONFIG_KEY);
     let cfg = { ...DEFAULT_CONFIG }; // Start with defaults
     if (raw) {
@@ -25,7 +26,7 @@ function loadConfig() {
                  }
             } else if (parsed.version > DEFAULT_CONFIG.version) {
                  GM_log(`Pack Filler Pro: Saved config version (${parsed.version}) is newer than script version (${DEFAULT_CONFIG.version}). Using default config.`);
-                 cfg = { ...DEFAULT_CONFIG }; // Use defaults if saved is newer
+                 cfg = { ...DEFAULT_CONFIG }; // Use defaults on parse error
             }
 
              // Ensure defaults for potentially missing values (from old versions or bad saves)
@@ -46,9 +47,12 @@ function loadConfig() {
      return cfg;
 }
 
+// Saves the current configuration to storage.
 function saveConfig() {
+    // Assumes GM_setValue and CONFIG_KEY are available from the main script's scope
+    // and 'config' is the global config object managed in the main script's scope.
     // Ensure version is always saved correctly
-    config.version = DEFAULT_CONFIG.version;
+    config.version = DEFAULT_CONFIG.version; // Assumes DEFAULT_CONFIG is available
     try {
         GM_setValue(CONFIG_KEY, JSON.stringify(config));
         // GM_log("Pack Filler Pro config saved."); // Too chatty for every change
@@ -57,7 +61,7 @@ function saveConfig() {
     }
 }
 
-// Debounce saving to avoid excessive writes on input changes
+// Debounces the saveConfig function to prevent excessive writes.
 const debouncedSaveConfig = (function() {
     let timer;
     return function() {
@@ -66,4 +70,5 @@ const debouncedSaveConfig = (function() {
     };
 })();
 
-// Assumes 'config' is updated elsewhere before calling debouncedSaveConfig.
+// Note: No IIFE wrapper needed in this file if the main script uses one,
+// as the functions defined here will be added to the main script's scope.
