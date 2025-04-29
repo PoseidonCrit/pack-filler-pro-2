@@ -24,7 +24,7 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
-//require        https://github.com/PoseidonCrit/pack-filler-pro-2/raw/refs/heads/main/pack-filler-pro2.user.js
+//require        https://raw.github.com/PoseidonCrit/pack-filler-pro-2/raw/refs/heads/main/pack-filler-pro2.user.js
 // ==/UserScript==
 
 // This block contains global constants and the default configuration object.
