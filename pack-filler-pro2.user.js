@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         🎴F105.27 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.28 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.27
+// @version      🎴F105.28
 // @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
@@ -23,7 +23,8 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js
+// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js // Require the new worker file
+
 
 // ==/UserScript==
 
@@ -87,13 +88,16 @@
                  patternWorker.onerror = (error) => {
                       GM_log("Pack Filler Pro: Web Worker failed to initialize or encountered an error.", error);
                       // Handle worker errors, potentially disable pattern features or show a warning
-                      SWAL_TOAST('Pattern Worker Error: Pattern features may be disabled.', 'error', config); // Use config if available
+                      // SWAL_TOAST('Pattern Worker Error: Pattern features may be disabled.', 'error', config); // Use config if available
+                      // Cannot use Swal here as config might not be fully loaded or Swal itself might have issues
+                      GM_log('Pack Filler Pro: Pattern Worker Error - Pattern features may be disabled.');
                  };
 
             } catch (e) {
                  GM_log("Pack Filler Pro: Failed to initialize Web Worker.", e);
                  patternWorker = null; // Ensure worker is null if initialization fails
-                 SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config); // Use config if available
+                 // SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config); // Use config if available
+                 GM_log('Pack Filler Pro: Pattern Worker Init Failed - Pattern features may be disabled.');
             }
         } else {
             GM_log("Pack Filler Pro: Web Worker API or workerCode not available. Pattern features will run on main thread.");
