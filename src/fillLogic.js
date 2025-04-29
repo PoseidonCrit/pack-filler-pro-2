@@ -1,45 +1,10 @@
 // This file contains the main logic for calculating and applying quantities to inputs.
 // It uses constants and DOM helper functions.
 // Note: This module now accepts the 'config' object as a parameter where needed.
-// Includes seeded randomness and a simple noise-like quantity generation.
 
 // It assumes 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
 // 'clearAllInputs', 'SWAL_ALERT', 'SWAL_TOAST', and 'updateConfigFromUI'
 // (or a mechanism to get current UI state) are accessible.
-
-/* --- Seeded Randomness (Simple LCG) --- */
-// A simple Linear Congruential Generator for seeded random numbers.
-// Not cryptographically secure, but sufficient for generating reproducible patterns.
-let currentSeed = 1; // Default seed
-
-function setSeed(seed) {
-    // Use a simple hashing to convert string seeds to numbers
-    let numericSeed = 0;
-    if (typeof seed === 'string' && seed.length > 0) {
-        for (let i = 0; i < seed.length; i++) {
-            numericSeed = (numericSeed << 5) - numericSeed + seed.charCodeAt(i);
-            numericSeed = numericSeed & numericSeed; // Convert to 32bit integer
-        }
-    } else if (typeof seed === 'number' && !isNaN(seed)) {
-        numericSeed = seed;
-    } else {
-        numericSeed = new Date().getTime(); // Use current time if seed is invalid or empty
-    }
-    currentSeed = numericSeed % 2147483647; // Keep seed within a reasonable range
-    if (currentSeed <= 0) currentSeed += 2147483646;
-     GM_log(`Pack Filler Pro: Seed set to ${seed} (Numeric: ${currentSeed})`); // Debugging log
-}
-
-function seededRandom() {
-    // LCG parameters (Numerical Recipes)
-    const a = 1664525;
-    const c = 1013904223;
-    const m = 2**32; // Using 2^32 for modulus
-
-    currentSeed = (a * currentSeed + c) % m;
-    return currentSeed / m; // Return a value between 0 (inclusive) and 1 (exclusive)
-}
-
 
 /* --- Core Logic --- */
  /**
@@ -64,14 +29,11 @@ function seededRandom() {
  }
 
  /**
-  * Determines the quantity for a single pack based on mode, settings, and index.
-  * Incorporates seeded randomness and simple noise.
+  * Determines the quantity for a single pack based on mode and settings.
   * @param {object} config - The script's configuration object.
-  * @param {number} index - The index of the current pack input being filled (0-based).
-  * @param {number} totalInputsToFill - The total number of inputs being filled in this operation.
   * @returns {number} The calculated quantity for a single pack.
   */
- function chooseQuantity(config, index, totalInputsToFill) { // Accept config, index, totalInputsToFill
+ function chooseQuantity(config) { // Accept config here
      const mode = config.lastMode;
      const fixedQty = config.lastFixedQty;
      const minQty = config.lastMinQty;
@@ -81,42 +43,22 @@ function seededRandom() {
      const mnQty = parseInt(minQty, 10) || 0; // Allow min 0
      const mxQty = parseInt(maxQty, 10) || 0; // Allow min 0
 
-     let baseQty = 0;
-
      switch (mode) {
          case 'fixed':
          case 'unlimited':
-              baseQty = clamp(fQty, 0, MAX_QTY);
-              // For fixed/unlimited, we can still apply a subtle noise based on index
-              // This makes quantities slightly vary even if the base is fixed
-              const noiseFactor = (seededRandom() - 0.5) * 2; // Random value between -1 and 1
-              // Adjust baseQty by a small percentage based on noise and MAX_QTY
-              const noiseAdjustment = Math.floor(noiseFactor * (MAX_QTY * 0.05)); // Up to 5% of MAX_QTY adjustment
-              baseQty = clamp(baseQty + noiseAdjustment, 0, MAX_QTY);
-              break;
+              return clamp(fQty, 0, MAX_QTY);
          case 'max':
               const min = Math.min(mnQty, mxQty);
               const max = Math.max(mnQty, mxQty);
               const clampedMin = clamp(min, 0, MAX_QTY);
               const clampedMax = clamp(max, 0, MAX_QTY);
 
-              if (clampedMin > clampedMax) return 0; // Should not happen with clamping/swapping
+              if (clampedMin > clampedMax) return 0; // Should not happen with clamping/swapping, but safe check
 
-              // Generate a random quantity within the specified range using seeded random
-              baseQty = Math.floor(seededRandom() * (clampedMax - clampedMin + 1)) + clampedMin;
-
-              // Optional: Add a more pronounced noise/pattern effect in random mode
-              // Example: Simple sinusoidal pattern based on index
-              // const patternFactor = Math.sin((index / totalInputsToFill) * Math.PI * 2); // Value between -1 and 1
-              // const patternAdjustment = Math.floor(patternFactor * (clampedMax - clampedMin) * 0.1); // Adjust by up to 10% of range
-              // baseQty = clamp(baseQty + patternAdjustment, clampedMin, clampedMax); // Clamp within the original range
-
-              break;
+              return Math.floor(Math.random() * (clampedMax - clampedMin + 1)) + clampedMin;
          default:
               return 0;
      }
-
-     return baseQty;
  }
 
 // This function is primarily used internally now when Max Total is NOT active in Random mode.
@@ -132,11 +74,11 @@ function distribute(n, total) {
          quantities.push(base);
     }
 
-    // Randomly distribute the remainder using seeded random
+    // Randomly distribute the remainder
     let indices = Array.from({length: n}, (_, i) => i); // Create an array of indices
-    // Shuffle the indices using seeded random
+    // Shuffle the indices
     for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(seededRandom() * (i + 1));
+        const j = Math.floor(Math.random() * (i + 1));
         [indices[i], indices[j]] = [indices[j], indices[i]]; // Swap
     }
 
@@ -159,7 +101,6 @@ function distribute(n, total) {
  * @param {boolean} isAutoFill - True if triggered by the auto-load process.
  */
 function fillPacks(config, isAutoFill = false) { // Accept config here
-    GM_log("Pack Filler Pro: fillPacks function started."); // Debugging log
     // Read current values from UI inputs before filling (only for manual trigger)
     if (!isAutoFill) {
         // Assumes updateConfigFromUI is available to sync UI state to config
@@ -168,10 +109,7 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
     }
 
     // Use config object directly (assumes 'config' is accessible)
-    const { lastMode: mode, lastCount: count, lastFixedQty: fixedQty, lastMinQty: minQty, lastMaxQty: maxQty, lastClear: clear, maxTotalAmount, fillEmptyOnly, noiseSeed } = config;
-
-    // Set the seed for reproducible randomness
-    setSeed(noiseSeed); // Use the seed from the config
+    const { lastMode: mode, lastCount: count, lastFixedQty: fixedQty, lastMinQty: minQty, lastMaxQty: maxQty, lastClear: clear, maxTotalAmount, fillEmptyOnly } = config;
 
     const inputs = getPackInputs(); // Assumes getPackInputs is accessible
     const availablePacks = inputs.length;
@@ -195,7 +133,7 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
 
     if (targetedCount === 0) {
          if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs targeted based on current mode (${mode}) and count (${count}).`, 'info', config); // Pass config to SWAL
-         GM_log(`Pack Filler Pro: Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
+         GM_log(`Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
          return;
     }
 
@@ -218,12 +156,12 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
              ? `No empty packs found among the ${targetedCount} targeted.`
              : `All ${targetedCount} targeted packs already have a quantity.`;
          if (!isAutoFill) SWAL_ALERT('Fill Packs', message, 'info', config); // Pass config to SWAL
-         GM_log(`Pack Filler Pro: Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, Filled: ${filledCount}`);
+         GM_log(`Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, Filled: ${filledCount}`);
          return;
     } else if (filledCount === 0 && targetedCount === 0) {
          // This case is already handled above, but defensive check
          if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs matched criteria to fill.`, 'info', config); // Pass config to SWAL
-          GM_log(`Pack Filler Pro: Fill operation aborted: No packs matched criteria.`);
+          GM_log(`Fill operation aborted: No packs matched criteria.`);
          return;
     }
 
@@ -235,19 +173,32 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
 
     // --- Core Filling Logic ---
     // Iterate through the inputs that should actually be filled
-    inputsToActuallyFill.forEach((input, index) => { // Added index here
+    inputsToActuallyFill.forEach(input => {
         let qty;
 
-        // Determine quantity using the updated chooseQuantity function
-        qty = chooseQuantity(config, index, inputsToActuallyFill.length); // Pass config, index, and total inputs being filled
+        if (mode === 'max') {
+            // Random Count (Range) mode
+            qty = chooseQuantity(config); // Pass config
 
-        // Apply Max Total cap if active
-        if (useMaxTotal) {
-            const remaining = maxTotalAmount - currentTotal;
-            if (currentTotal + qty > maxTotalAmount) {
-                qty = Math.max(0, remaining); // Set quantity to whatever is left, or 0
-                maxTotalHit = true; // Mark that the total limit was hit
+            // If Max Total is active in Random mode, adjust quantity if it exceeds the remaining total
+            if (useMaxTotal) {
+                const remaining = maxTotalAmount - currentTotal;
+                if (currentTotal + qty > maxTotalAmount) {
+                    qty = Math.max(0, remaining); // Set quantity to whatever is left, or 0
+                    maxTotalHit = true; // Mark that the total limit was hit
+                }
             }
+        } else {
+            // Fixed Count or Unlimited mode (Max Total only applies here as a cap)
+            qty = chooseQuantity(config); // Pass config
+
+             if (useMaxTotal) {
+                 const remaining = maxTotalAmount - currentTotal;
+                 if (currentTotal + qty > maxTotalAmount) {
+                     qty = Math.max(0, remaining);
+                     maxTotalHit = true;
+                 }
+             }
         }
 
         // Update the input with the determined quantity
@@ -266,7 +217,7 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
          switch (mode) {
              case 'fixed':
                  feedbackModeDesc = `Fixed Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                 feedbackQuantityDesc = `${fixedQty} copies per pack (with subtle noise).`;
+                 feedbackQuantityDesc = `${fixedQty} copies per pack.`;
                  break;
              case 'max':
                   feedbackModeDesc = `Random Count Mode (${count} pack${count === 1 ? '' : 's'})`;
@@ -277,7 +228,7 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
                   break;
              case 'unlimited':
                  feedbackModeDesc = `All Visible Packs Mode`;
-                 feedbackQuantityDesc = `${fixedQty} copies per pack (with subtle noise).`;
+                 feedbackQuantityDesc = `${fixedQty} copies per pack.`;
                  break;
              default:
                  feedbackModeDesc = `Mode: ${mode}`;
@@ -288,13 +239,12 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
          const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
          const emptyOnlyStatus = fillEmptyOnly ? "<br>- Only Empty Inputs Filled" : "";
          const maxTotalStatus = useMaxTotal && maxTotalHit ? `<br>- Max Total Limit (${maxTotalAmount}) Reached` : '';
-         const seedStatus = noiseSeed ? `<br>- Using Seed: "${noiseSeed}"` : '';
 
 
          const averagePerFilled = filledCount > 0 ? (currentTotal / filledCount).toFixed(2) : 'N/A';
 
          let summaryHtml = `
-              <p><strong>Operation Details:</strong>${clearStatus}${autoFillStatus}${emptyOnlyStatus}${maxTotalStatus}${seedStatus}</p>
+              <p><strong>Operation Details:</strong>${clearStatus}${autoFillStatus}${emptyOnlyStatus}${maxTotalStatus}</p>
               <p><strong>Fill Mode:</strong> ${feedbackModeDesc}</p>
               <p><strong>Targeted Packs:</strong> ${targetedCount} / ${availablePacks} visible</p>
               <p><strong>Packs Actually Filled:</strong> ${filledCount}</p>
@@ -312,8 +262,7 @@ function fillPacks(config, isAutoFill = false) { // Accept config here
               SWAL_ALERT('Fill Summary', summaryHtml, 'success', config); // Pass config to SWAL
           }
      }
-     GM_log("Pack Filler Pro: fillPacks function finished."); // Debugging log
  }
 
-// The functions calculateFillCount, chooseQuantity, setSeed, seededRandom, and fillPacks are made available
+// The functions calculateFillCount, chooseQuantity, and fillPacks are made available
 // to the main script's scope via @require.
