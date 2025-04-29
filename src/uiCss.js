@@ -1,17 +1,17 @@
 // This file contains the HTML structure and CSS styles for the UI panel and toggle button.
-// It is updated for a more modern look and feel.
+// It is updated for a more modern look and feel and includes the seed input.
 // Styles are added using GM_addStyle.
 
 // Assumes GM_addStyle and MAX_QTY are accessible.
 // Assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID are accessible constants.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID, NOISE_SEED_INPUT_ID are accessible constants.
 
 /* --- UI Panel HTML --- */
 const panelHTML = `
       <div id="${PANEL_ID}" class="pfp-panel">
         <div class="pfp-header" title="Drag to move panel">
-          <span class="pfp-title">🎴 Pack Filler Pro</span>
+          <span class="pfp-title">Pack Filler Pro</span>
           <span class="pfp-close" title="Close Panel">×</span>
         </div>
         <div class="pfp-body" data-simplebar>
@@ -54,6 +54,12 @@ const panelHTML = `
                 <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10">
              </datalist>
           </div>
+
+          <div class="pfp-form-group">
+            <label for="${NOISE_SEED_INPUT_ID}" class="pfp-label">Noise Seed (for reproducible patterns):</label>
+            <input type="text" id="${NOISE_SEED_INPUT_ID}" class="pfp-input" placeholder="Leave empty for random seed" />
+          </div>
+
 
           <div class="pfp-options-divider">Options</div>
 
