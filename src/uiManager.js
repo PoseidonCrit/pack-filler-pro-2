@@ -12,7 +12,8 @@
 // 'getPackInputs' from src/domUtils.js,
 // 'SELECTOR', 'FULL_PAGE_CHECKBOX_ID',
 // 'AUTO_FILL_LOADED_CHECKBOX_ID', 'FILL_EMPTY_ONLY_CHECKBOX_ID',
-// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID' from src/constants.js,
+// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID', DARK_MODE_CHECKBOX_ID,
+// NOISE_SEED_INPUT_ID from src/constants.js,
 // and GM_log are available via @require.
 
 /* --- UI Event Binding --- */
@@ -51,13 +52,18 @@ function bindPanelEvents(config) { // Accept config here
         updateConfigFromUI(config); // Pass config
         debouncedSaveConfig(config); // Pass config
 
-        // Removed Dark Mode toggle logic
-        /*
+        // Dark Mode toggle logic
         if (e.target.id === DARK_MODE_CHECKBOX_ID) { // Uses DARK_MODE_CHECKBOX_ID from src/constants.js
             applyDarkMode(config, e.target.checked); // Pass config
         }
-        */
     });
+
+    // Noise Seed Input (Debounced Save)
+    $(`#${NOISE_SEED_INPUT_ID}`).on('input change', function() { // Uses NOISE_SEED_INPUT_ID from src/constants.js
+         GM_log(`Pack Filler Pro: Noise Seed input changed to: ${this.value}`); // Debugging log
+         updateConfigFromUI(config); // Pass config
+         debouncedSaveConfig(config); // Pass config
+    });
 
 
     // Panel Close Button
@@ -160,7 +166,7 @@ function updatePanelVisibility(config, isVisible, position = null) { // Accept c
 // Loads the saved configuration values into the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID, NOISE_SEED_INPUT_ID are available.
 /**
  * Loads the saved configuration values into the UI elements.
  * @param {object} config - The script's configuration object.
@@ -175,12 +181,14 @@ function loadConfigIntoUI(config) { // Accept config here
     $('#pfp-max').val(config.lastMaxQty);
     $('#pfp-clear').prop('checked', config.lastClear);
     $(`#${FULL_PAGE_CHECKBOX_ID}`).prop('checked', config.loadFullPage);
-    // $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode); // Removed Dark Mode
+    $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode); // Re-added Dark Mode
     $(`#${MAX_TOTAL_INPUT_ID}`).val(config.maxTotalAmount);
     $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked', config.autoFillLoaded);
     $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly);
     // Load state for the new checkbox
     $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked', config.scrollToBottomAfterLoad);
+    // Load state for the new seed input
+    $(`#${NOISE_SEED_INPUT_ID}`).val(config.noiseSeed);
 
 
     // Apply initial panel position from config
@@ -195,7 +203,8 @@ function loadConfigIntoUI(config) { // Accept config here
 // Updates the 'config' object based on the current values in the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, MAX_QTY, clamp,
 // FULL_PAGE_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
+// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
+// NOISE_SEED_INPUT_ID are available.
 /**
  * Updates the config object based on the current UI state.
  * @param {object} config - The script's configuration object to update.
@@ -210,12 +219,14 @@ function updateConfigFromUI(config) { // Accept config here
     config.lastMaxQty = parseInt($('#pfp-max').val(), 10) || 0;
     config.lastClear = $('#pfp-clear').is(':checked');
     config.loadFullPage = $(`#${FULL_PAGE_CHECKBOX_ID}`).is(':checked');
-    // config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked'); // Removed Dark Mode
+    config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked'); // Re-added Dark Mode
     config.maxTotalAmount = parseInt($(`#${MAX_TOTAL_INPUT_ID}`).val(), 10) || 0;
     config.autoFillLoaded = $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).is(':checked');
     config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).is(':checked');
     // Update state for the new checkbox
     config.scrollToBottomAfterLoad = $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).is(':checked');
+    // Update state for the new seed input
+    config.noiseSeed = $(`#${NOISE_SEED_INPUT_ID}`).val();
 
 
     // Ensure quantities are within valid bounds after reading
@@ -231,7 +242,53 @@ function updateConfigFromUI(config) { // Accept config here
     GM_log("Pack Filler Pro: Config updated from UI."); // Assumes GM_log is available
 }
 
-// Removed applyDarkMode function
+/**
+ * Applies or removes the dark mode class to relevant elements.
+ * @param {object} config - The script's configuration object.
+ * @param {boolean} enable - Whether to enable or disable dark mode.
+ */
+function applyDarkMode(config, enable) { // Accept config here
+    // Assumes panelElement is available
+    if (!panelElement) return;
+
+    // Apply dark mode class to the panel
+    $(panelElement).toggleClass('dark-mode', enable);
+    // Apply dark mode class to the toggle button (adjacent sibling)
+    $(toggleButtonElement).toggleClass('dark-mode', enable);
+
+    // Apply dark mode class to SweetAlert2 popups dynamically
+    // SweetAlert2 adds popups directly to the body, so we observe the body
+    const swalObserver = new MutationObserver((mutationsList) => {
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1 && (node.classList.contains('swal2-popup') || node.classList.contains('swal2-toast-popup'))) {
+                        $(node).toggleClass('dark-mode', enable);
+                    }
+                });
+            }
+        }
+    });
+
+    // Start observing the body for added SweetAlert2 popups
+    // Use a global flag or check if observer is already running to avoid duplicates
+    if (!window._pfpSwalObserver) {
+         swalObserver.observe(document.body, { childList: true });
+         window._pfpSwalObserver = swalObserver; // Store the observer instance
+    } else {
+         // If observer already exists, stop it, disconnect, and restart with the new mode
+         window._pfpSwalObserver.disconnect();
+         swalObserver.observe(document.body, { childList: true });
+         window._pfpSwalObserver = swalObserver;
+    }
+
+    // Also apply to any existing SweetAlert2 popups that might be open
+    $('.swal2-popup, .swal2-toast-popup').toggleClass('dark-mode', enable);
+
+    config.isDarkMode = enable; // Update config state
+    // No need to save config here, as the input/change listener already calls debouncedSaveConfig
+}
+
 
 // The functions updatePanelModeDisplay, updatePanelVisibility, loadConfigIntoUI,
-// and updateConfigFromUI are made available to the main script's scope via @require.
+// updateConfigFromUI, and applyDarkMode are made available to the main script's scope via @require.
