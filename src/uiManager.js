@@ -11,7 +11,7 @@
 // 'getPackInputs' from src/domUtils.js,
 // 'SELECTOR', 'DARK_MODE_CHECKBOX_ID', 'FULL_PAGE_CHECKBOX_ID',
 // 'AUTO_FILL_LOADED_CHECKBOX_ID', 'FILL_EMPTY_ONLY_CHECKBOX_ID',
-// 'MAX_TOTAL_INPUT_ID' from src/constants.js,
+// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID' from src/constants.js,
 // and GM_log are available via @require.
 
 /* --- UI Event Binding --- */
@@ -133,7 +133,7 @@ function updatePanelVisibility(isVisible, position = null) {
 // Loads the saved configuration values into the UI elements.
 // Assumes panelElement, config, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
 // DARK_MODE_CHECKBOX_ID, MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID,
-// FILL_EMPTY_ONLY_CHECKBOX_ID are available.
+// FILL_EMPTY_ONLY_CHECKBOX_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
 function loadConfigIntoUI() {
     if (!panelElement) return;
 
@@ -148,6 +148,9 @@ function loadConfigIntoUI() {
     $(`#${MAX_TOTAL_INPUT_ID}`).val(config.maxTotalAmount);
     $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked', config.autoFillLoaded);
     $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly);
+    // Load state for the new checkbox
+    $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked', config.scrollToBottomAfterLoad);
+
 
     // Apply initial panel position from config
     // Clear previous positioning properties before applying new ones
@@ -161,7 +164,8 @@ function loadConfigIntoUI() {
 // Updates the 'config' object based on the current values in the UI elements.
 // Assumes panelElement, config, DEFAULT_CONFIG, MAX_QTY, clamp,
 // FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID, MAX_TOTAL_INPUT_ID,
-// AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID are available.
+// AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
+// SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
 function updateConfigFromUI() {
     if (!panelElement) return;
 
@@ -176,6 +180,8 @@ function updateConfigFromUI() {
     config.maxTotalAmount = parseInt($(`#${MAX_TOTAL_INPUT_ID}`).val(), 10) || 0;
     config.autoFillLoaded = $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).is(':checked');
     config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).is(':checked');
+    // Update state for the new checkbox
+    config.scrollToBottomAfterLoad = $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).is(':checked');
 
 
     // Ensure quantities are within valid bounds after reading
