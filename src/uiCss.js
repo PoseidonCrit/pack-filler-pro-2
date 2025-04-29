@@ -1,5 +1,5 @@
 // This file contains the HTML structure and CSS styles for the UI panel and toggle button.
-// In a modular setup, this could be 'uiHtml.js' and 'uiCss.js', or combined.
+// It is updated for a more modern look and feel.
 // Styles are added using GM_addStyle.
 
 // Assumes GM_addStyle and MAX_QTY are accessible.
@@ -32,6 +32,9 @@ const panelHTML = `
           <div class="pfp-form-group" id="pfp-fixed-group">
             <label for="pfp-fixed" class="pfp-label">Copies per Pack:</label>
             <input type="number" id="pfp-fixed" min="0" max="${MAX_QTY}" list="pfp-fixed-list" class="pfp-input" placeholder="e.g., 1 or 3" />
+            <datalist id="pfp-fixed-list">
+              <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="99">
+            </datalist>
           </div>
 
           <div id="pfp-range-inputs">
@@ -47,6 +50,9 @@ const panelHTML = `
                <label for="${MAX_TOTAL_INPUT_ID}" class="pfp-label">Max Total Copies (0 to disable):</label>
                <input type="number" id="${MAX_TOTAL_INPUT_ID}" min="0" class="pfp-input" placeholder="e.g., 100" />
              </div>
+             <datalist id="pfp-range-list">
+                <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10">
+             </datalist>
           </div>
 
           <div class="pfp-options-divider">Options</div>
@@ -76,20 +82,18 @@ const panelHTML = `
             <label for="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically scrolls to the bottom of the page after all packs have finished loading.">Scroll to bottom after load</label>
           </div>
 
+          <div class="pfp-form-check">
+            <input type="checkbox" id="${DARK_MODE_CHECKBOX_ID}" class="pfp-checkbox" />
+            <label for="${DARK_MODE_CHECKBOX_ID}" class="pfp-label pfp-label-inline">Enable Dark Mode</label>
+          </div>
 
-                              <div class="pfp-form-actions">
+          <div class="pfp-form-actions">
             <button id="pfp-run" class="pfp-button pfp-button-primary" title="Fill pack inputs based on current settings">Fill Packs</button>
             <button id="pfp-clear-btn" class="pfp-button pfp-button-secondary" title="Set all pack inputs to zero">Clear All</button>
             </div>
 
           <datalist id="pfp-count-list">
             <option value="1"><option value="5"><option value="10"><option value="24"><option value="50">
-          </datalist>
-          <datalist id="pfp-fixed-list">
-            <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="99">
-          </datalist>
-          <datalist id="pfp-range-list">
-            <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10">
           </datalist>
         </div>
         <div class="pfp-footer">
@@ -126,7 +130,7 @@ function addPanelCSS() {
           button.mini.secondary:hover { background-color: #545b62; border-color: #4a5258; }
 
 
-        :root { /* CSS Variables for theming (Simplified - No Dark Mode) */
+        :root { /* CSS Variables for theming */
             --pfp-bg-color: rgba(255, 255, 255, 0.95);
             --pfp-border-color: rgba(0, 0, 0, 0.1);
             --pfp-shadow-color: rgba(0, 0, 0, 0.25);
@@ -162,8 +166,7 @@ function addPanelCSS() {
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
         }
 
-        /* Removed Dark Mode Variables */
-        /*
+        /* Dark Mode Variables */
         .pfp-panel.dark-mode, .pfp-swal-popup.dark-mode, .pfp-swal-toast-popup.dark-mode {
             --pfp-bg-color: rgba(40, 44, 52, 0.9);
             --pfp-border-color: rgba(255, 255, 255, 0.15);
@@ -197,7 +200,6 @@ function addPanelCSS() {
              --pfp-swal-button-text: var(--pfp-header-text);
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
         }
-        */
 
 
         .pfp-panel {
@@ -206,7 +208,7 @@ function addPanelCSS() {
             background: var(--pfp-bg-color);
             border-radius: var(--pfp-border-radius);
             box-shadow: 0 10px 30px var(--pfp-shadow-color), 0 0 0 1px var(--pfp-border-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            font-family: 'Inter', sans-serif; /* Use Inter font */
             color: var(--pfp-text-color);
             z-index: 1000001;
             transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
@@ -361,7 +363,7 @@ function addPanelCSS() {
 
 
         .pfp-select:focus {
-             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
+             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3csvg%3e");
         }
 
 
@@ -420,6 +422,7 @@ function addPanelCSS() {
             transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
             text-align: center; border: 1px solid; white-space: nowrap;
             text-decoration: none;
+             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Add subtle shadow to buttons */
         }
 
         .pfp-button-primary {
@@ -428,6 +431,7 @@ function addPanelCSS() {
         }
         .pfp-button-primary:hover {
             background-color: var(--pfp-primary-hover); border-color: var(--pfp-primary-hover); opacity: 1;
+             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Enhance shadow on hover */
         }
 
         .pfp-button-secondary {
@@ -436,6 +440,7 @@ function addPanelCSS() {
         }
         .pfp-button-secondary:hover {
             background-color: var(--pfp-secondary-hover); border-color: var(--pfp-secondary-hover); opacity: 1;
+             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Enhance shadow on hover */
         }
 
 
@@ -500,7 +505,7 @@ function addPanelCSS() {
             box-shadow: 0 10px 30px var(--pfp-shadow-color), 0 0 0 1px var(--pfp-border-color) !important;
             backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important;
             border: 1px solid var(--pfp-border-color) !important; overflow: hidden !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif !important;
+            font-family: 'Inter', sans-serif !important; /* Use Inter font */
             z-index: 10000000 !important; /* Ensure modals are on top */
         }
         .pfp-swal-title {
