@@ -55,5 +55,5 @@ function SWAL_TOAST(title, icon = 'info') {
     });
 }
 
-// Note: No IIFE wrapper needed in this file if the main script uses one,
-// as the functions defined here will be added to the main script's scope.
+// The functions SWAL_ALERT and SWAL_TOAST are made available
+// to the main script's scope via @require.
