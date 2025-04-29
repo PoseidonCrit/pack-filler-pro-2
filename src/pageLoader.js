@@ -1,16 +1,19 @@
-// This block handles the logic for automatically scrolling the page to load all packs.
-// It uses the 'config' and relies on browser window/document properties.
-// In a modular setup, this could be a 'pageLoader.js' module.
-
-// Assumes 'config', 'getPackInputs', 'fillPacks', and 'SWAL_TOAST' are accessible.
+// This file handles the logic for automatically scrolling the page to load all packs.
+// It uses the 'config' object (assumed available from the main script's scope)
+// and relies on browser window/document properties.
+// It assumes 'getPackInputs' from src/domUtils.js,
+// 'fillPacks' from src/fillLogic.js,
+// 'SWAL_TOAST' from src/swalHelpers.js,
+// and '$' from cash-dom are available via @require.
 
 /* --- Full Page Load Functionality (Programmatic Scrolling) --- */
 async function loadFullPageIfNeeded() {
+    // Uses 'config' from the main script's scope (assumed available)
     if (!config.loadFullPage) {
-         GM_log("Pack Filler Pro: Auto-load full page is disabled in config.");
+         GM_log("Pack Filler Pro: Auto-load full page is disabled in config."); // Assumes GM_log is available
          // Ensure max count for input is updated based on initially visible if not auto-loading
-         // Assumes '$' is accessible
-         $('#pfp-count').attr('max', getPackInputs().length); // Assumes getPackInputs is accessible
+         // Uses $ from cash-dom and getPackInputs from src/domUtils.js
+         $('#pfp-count').attr('max', getPackInputs().length);
          return;
     }
 
@@ -23,7 +26,7 @@ async function loadFullPageIfNeeded() {
     let lastHeight = 0;
     let currentHeight = document.body.scrollHeight;
     let scrollAttempts = 0;
-    const initialInputCount = getPackInputs().length; // Assumes getPackInputs is accessible
+    const initialInputCount = getPackInputs().length; // Uses getPackInputs from src/domUtils.js
 
 
     // Initial short wait for page elements to render
@@ -56,9 +59,10 @@ async function loadFullPageIfNeeded() {
          }
 
         // Optional: Call fillPacks with isAutoFill=true if auto-fill is enabled
+        // Uses fillPacks from src/fillLogic.js
         if (config.autoFillLoaded) {
              setTimeout(() => {
-                 fillPacks(true); // Assumes fillPacks is accessible
+                 fillPacks(true);
              }, 50);
         }
 
@@ -79,21 +83,23 @@ async function loadFullPageIfNeeded() {
 
     GM_log("Pack Filler Pro: Full page auto-load process finished.");
      // Final update to max count
-     $('#pfp-count').attr('max', getPackInputs().length); // Assumes '$' and getPackInputs are accessible
+     // Uses $ from cash-dom and getPackInputs from src/domUtils.js
+     $('#pfp-count').attr('max', getPackInputs().length);
 
     // Optional: Show a final toast message
-    const finalInputCount = getPackInputs().length; // Assumes getPackInputs is accessible
+    const finalInputCount = getPackInputs().length; // Uses getPackInputs from src/domUtils.js
     if (finalInputCount > initialInputCount) {
-        SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`, 'success'); // Assumes SWAL_TOAST is accessible
+        SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`, 'success'); // Uses SWAL_TOAST from src/swalHelpers.js
     } else if (initialInputCount > 0) {
-        SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially.`, 'info'); // Assumes SWAL_TOAST is accessible
+        SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially.`, 'info');
     } else {
-        if ($('.pack-num-input').length === 0) { // Assumes '$' is accessible
-             SWAL_TOAST('No pack inputs found on the page.', 'info'); // Assumes SWAL_TOAST is accessible
+        if ($('.pack-num-input').length === 0) { // Uses $ from cash-dom
+             SWAL_TOAST('No pack inputs found on the page.', 'info');
         } else {
-             SWAL_TOAST("Auto-load finished. Found packs.", 'info'); // Assumes SWAL_TOAST is accessible
+             SWAL_TOAST("Auto-load finished. Found packs.", 'info');
         }
     }
 }
 
-// Assumes this function will be called during initialization if the config option is enabled.
+// Note: No IIFE wrapper needed in this file if the main script uses one,
+// as the functions defined here will be added to the main script's scope.
