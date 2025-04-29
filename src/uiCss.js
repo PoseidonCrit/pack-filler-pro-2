@@ -1,11 +1,11 @@
 // This file contains the HTML structure and CSS styles for the UI panel and toggle button.
-// It is updated for a more modern look and feel and includes the seed input.
+// In a modular setup, this could be 'uiHtml.js' and 'uiCss.js', or combined.
 // Styles are added using GM_addStyle.
 
 // Assumes GM_addStyle and MAX_QTY are accessible.
 // Assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID, NOISE_SEED_INPUT_ID are accessible constants.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID are accessible constants.
 
 /* --- UI Panel HTML --- */
 const panelHTML = `
@@ -32,9 +32,6 @@ const panelHTML = `
           <div class="pfp-form-group" id="pfp-fixed-group">
             <label for="pfp-fixed" class="pfp-label">Copies per Pack:</label>
             <input type="number" id="pfp-fixed" min="0" max="${MAX_QTY}" list="pfp-fixed-list" class="pfp-input" placeholder="e.g., 1 or 3" />
-            <datalist id="pfp-fixed-list">
-              <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="99">
-            </datalist>
           </div>
 
           <div id="pfp-range-inputs">
@@ -50,16 +47,7 @@ const panelHTML = `
                <label for="${MAX_TOTAL_INPUT_ID}" class="pfp-label">Max Total Copies (0 to disable):</label>
                <input type="number" id="${MAX_TOTAL_INPUT_ID}" min="0" class="pfp-input" placeholder="e.g., 100" />
              </div>
-             <datalist id="pfp-range-list">
-                <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10">
-             </datalist>
           </div>
-
-          <div class="pfp-form-group">
-            <label for="${NOISE_SEED_INPUT_ID}" class="pfp-label">Noise Seed (for reproducible patterns):</label>
-            <input type="text" id="${NOISE_SEED_INPUT_ID}" class="pfp-input" placeholder="Leave empty for random seed" />
-          </div>
-
 
           <div class="pfp-options-divider">Options</div>
 
@@ -88,6 +76,7 @@ const panelHTML = `
             <label for="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically scrolls to the bottom of the page after all packs have finished loading.">Scroll to bottom after load</label>
           </div>
 
+
           <div class="pfp-form-check">
             <input type="checkbox" id="${DARK_MODE_CHECKBOX_ID}" class="pfp-checkbox" />
             <label for="${DARK_MODE_CHECKBOX_ID}" class="pfp-label pfp-label-inline">Enable Dark Mode</label>
@@ -100,6 +89,12 @@ const panelHTML = `
 
           <datalist id="pfp-count-list">
             <option value="1"><option value="5"><option value="10"><option value="24"><option value="50">
+          </datalist>
+          <datalist id="pfp-fixed-list">
+            <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="99">
+          </datalist>
+          <datalist id="pfp-range-list">
+            <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10">
           </datalist>
         </div>
         <div class="pfp-footer">
@@ -198,7 +193,7 @@ function addPanelCSS() {
             --pfp-checkbox-checked-border: var(--pfp-secondary-color);
             --pfp-checkbox-checked-check: #000;
             --pfp-range-border: rgba(255, 255, 255, 0.1);
-            --pfp-range-bg: rgba(255, 255, 255, 0.05);
+            --pfp-range-bg: rgba(0, 0, 0, 0.05);
              --pfp-swal-button-primary-color: var(--pfp-primary-color);
              --pfp-swal-button-primary-hover: var(--pfp-primary-hover);
              --pfp-swal-button-secondary-color: var(--pfp-secondary-color);
@@ -214,7 +209,7 @@ function addPanelCSS() {
             background: var(--pfp-bg-color);
             border-radius: var(--pfp-border-radius);
             box-shadow: 0 10px 30px var(--pfp-shadow-color), 0 0 0 1px var(--pfp-border-color);
-            font-family: 'Inter', sans-serif; /* Use Inter font */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
             color: var(--pfp-text-color);
             z-index: 1000001;
             transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
@@ -236,7 +231,7 @@ function addPanelCSS() {
             pointer-events: none;
         }
 
-        /* Add position classes for drag/snap (Keeping these for initial positioning) */
+        /* Add position classes for drag/snap */
         .pfp-panel.pos-left { left: 16px; right: auto; }
         .pfp-panel.pos-right { right: 16px; left: auto; }
         .pfp-panel.pos-bottom { bottom: 16px; top: auto; } /* New class for snapped bottom */
@@ -247,7 +242,7 @@ function addPanelCSS() {
             background: var(--pfp-header-bg);
             color: var(--pfp-header-text);
             padding: 14px 20px;
-            /* Removed cursor: grab; */
+            cursor: grab;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -255,9 +250,9 @@ function addPanelCSS() {
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             border-top-left-radius: var(--pfp-border-radius);
             border-top-right-radius: var(--pfp-border-radius);
-            /* Removed touch-action: none; */
+            touch-action: none;
         }
-        /* Removed .pfp-header:active { cursor: grabbing; } */
+        .pfp-header:active { cursor: grabbing; }
 
 
         .pfp-panel.dark-mode .pfp-header {
@@ -369,7 +364,7 @@ function addPanelCSS() {
 
 
         .pfp-select:focus {
-             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3csvg%3e");
+             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
         }
 
 
@@ -428,7 +423,6 @@ function addPanelCSS() {
             transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
             text-align: center; border: 1px solid; white-space: nowrap;
             text-decoration: none;
-             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Add subtle shadow to buttons */
         }
 
         .pfp-button-primary {
@@ -437,7 +431,6 @@ function addPanelCSS() {
         }
         .pfp-button-primary:hover {
             background-color: var(--pfp-primary-hover); border-color: var(--pfp-primary-hover); opacity: 1;
-             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Enhance shadow on hover */
         }
 
         .pfp-button-secondary {
@@ -446,7 +439,6 @@ function addPanelCSS() {
         }
         .pfp-button-secondary:hover {
             background-color: var(--pfp-secondary-hover); border-color: var(--pfp-secondary-hover); opacity: 1;
-             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Enhance shadow on hover */
         }
 
 
@@ -511,7 +503,7 @@ function addPanelCSS() {
             box-shadow: 0 10px 30px var(--pfp-shadow-color), 0 0 0 1px var(--pfp-border-color) !important;
             backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important;
             border: 1px solid var(--pfp-border-color) !important; overflow: hidden !important;
-            font-family: 'Inter', sans-serif !important; /* Use Inter font */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif !important;
             z-index: 10000000 !important; /* Ensure modals are on top */
         }
         .pfp-swal-title {
@@ -545,7 +537,7 @@ function addPanelCSS() {
         }
 
         .swal2-actions button.mini.secondary {
-            background-color: var(--pfp-secondary-color) !important; border-color: var(--pfp-secondary-color) !important;
+            background-color: var(--pfp-swal-button-secondary-color) !important; border-color: var(--pfp-swal-button-secondary-color) !important;
             color: var(--pfp-secondary-text) !important;
         }
         .swal2-actions button.mini.secondary:hover {
@@ -555,22 +547,47 @@ function addPanelCSS() {
 
         /* Toast Specific Styling */
         .pfp-swal-toast-popup {
-            box-shadow: 0 3px 10px var(--pfp-shadow-color) !important; padding: 10px 15px !important;
-            font-size: 13px !important; line-height: 1.4 !important; border-radius: 6px !important;
-            background: var(--pfp-bg-color) !important; color: var(--pfp-text-color) !important;
-            border: 1px solid var(--pfp-border-color) !important;
-            backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important;
+            /* Modern Toast Styles */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important; /* Softer shadow */
+            padding: 12px 18px !important; /* Increased padding */
+            font-size: 14px !important; /* Slightly larger font */
+            line-height: 1.5 !important;
+            border-radius: 8px !important; /* More rounded corners */
+            background: var(--pfp-bg-color) !important; /* Use panel background */
+            color: var(--pfp-text-color) !important; /* Use panel text color */
+            border: 1px solid var(--pfp-border-color) !important; /* Use panel border color */
+            backdrop-filter: blur(6px) !important; /* Slightly less blur */
+            -webkit-backdrop-filter: blur(6px) !important;
             z-index: 10000002 !important; /* Ensure toasts are on top of everything, including modals */
+            display: flex !important; /* Use flexbox for alignment */
+            align-items: center !important; /* Vertically align items */
         }
+
         .pfp-swal-toast-popup .swal2-title {
-            margin: 0 !important; font-size: 14px !important; font-weight: normal !important;
-            text-align: center !important;
+            margin: 0 !important;
+            font-size: 14px !important; /* Keep title font size consistent with body */
+            font-weight: normal !important;
+            text-align: left !important; /* Align text left */
+             flex-grow: 1; /* Allow title to take available space */
         }
         .pfp-swal-toast-popup .swal2-icon {
-            margin-right: 10px !important; margin-left: 0 !important; width: 25px !important; height: 25px !important;
+            margin-right: 12px !important; /* Increased space after icon */
+            margin-left: 0 !important;
+            width: 28px !important; /* Slightly larger icon */
+            height: 28px !important;
+             flex-shrink: 0; /* Prevent icon from shrinking */
         }
-        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 18px !important; }
-        .pfp-swal-toast-popup .swal2-close { position: absolute; top: 5px; right: 5px; }
+        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 20px !important; /* Adjust icon content size */ }
+        .pfp-swal-toast-popup .swal2-close {
+             position: static !important; /* Position close button inline */
+             margin-left: 10px !important; /* Space before close button */
+             padding: 4px !important; /* Padding for easier clicking */
+             transition: opacity 0.2s ease;
+             opacity: 0.7;
+         }
+         .pfp-swal-toast-popup .swal2-close:hover {
+             opacity: 1;
+         }
 
         `);
 }
