@@ -12,6 +12,8 @@
  * @param {object} config - The script's configuration object.
  */
 async function loadFullPageIfNeeded(config) { // Accept config as a parameter
+    GM_log("Pack Filler Pro: loadFullPageIfNeeded function entered."); // Debugging log
+
     // Uses 'config' passed as a parameter. Add a check for config validity.
     if (!config || !config.loadFullPage) { // Check if config is valid and auto-load is enabled
          GM_log("Pack Filler Pro: Auto-load full page is disabled in config or config is invalid."); // Assumes GM_log is available
