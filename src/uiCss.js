@@ -1,14 +1,13 @@
 // This file contains the HTML structure and CSS styles for the UI panel and toggle button.
+// In a modular setup, this could be 'uiHtml.js' and 'uiCss.js', or combined.
 // Styles are added using GM_addStyle.
-// It assumes GM_addStyle and MAX_QTY are available from the main script's scope
-// or src/constants.js via @require.
-// It also assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
-// MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID
-// are available from src/constants.js via @require.
+
+// Assumes GM_addStyle and MAX_QTY are accessible.
+// Assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
+// MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
+// SCROLL_TO_BOTTOM_CHECKBOX_ID are accessible constants.
 
 /* --- UI Panel HTML --- */
-// HTML string for the main panel structure.
-// Uses constants from src/constants.js
 const panelHTML = `
       <div id="${PANEL_ID}" class="pfp-panel">
         <div class="pfp-header" title="Drag to move panel">
@@ -72,6 +71,11 @@ const panelHTML = `
             <label for="${AUTO_FILL_LOADED_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically fills quantities for new packs loaded by 'Auto-load all packs'.">Auto-fill newly loaded packs</label>
           </div>
 
+         <div class="pfp-form-check">
+            <input type="checkbox" id="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-checkbox" />
+            <label for="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically scrolls to the bottom of the page after all packs have finished loading.">Scroll to bottom after load</label>
+          </div>
+
 
           <div class="pfp-form-check">
             <input type="checkbox" id="${DARK_MODE_CHECKBOX_ID}" class="pfp-checkbox" />
@@ -99,8 +103,6 @@ const panelHTML = `
       </div>
     `;
 
-// HTML string for the toggle button.
-// Uses TOGGLE_BUTTON_ID from src/constants.js
 const panelToggleHTML = `
      <button id="${TOGGLE_BUTTON_ID}" class="pfp-toggle-button" title="Toggle Pack Filler Pro Panel">
          🎴
@@ -108,9 +110,8 @@ const panelToggleHTML = `
 `;
 
 /* --- UI Panel CSS --- */
-// This function adds the necessary CSS styles to the page using GM_addStyle.
-// It assumes GM_addStyle and GM_info are available from the main script's scope.
-// It uses various CSS variables for theming.
+// This function adds the necessary CSS styles to the page.
+// It uses GM_addStyle from the UserScript API.
 function addPanelCSS() {
     GM_addStyle(`
         /* --- mini.css base (subset used for Swal buttons) --- */
@@ -123,11 +124,11 @@ function addPanelCSS() {
         }
         button.mini:hover { text-decoration: none; }
 
-        button.mini.primary { color: #fff; background-color: var(--pfp-swal-button-primary-color); border-color: var(--pfp-swal-button-primary-color); }
-        button.mini.primary:hover { background-color: var(--pfp-swal-button-primary-hover); border-color: var(--pfp-swal-button-primary-hover); }
+        button.mini.primary { color: #fff; background-color: #007bff; border-color: #007bff; }
+        button.mini.primary:hover { background-color: #0056b3; border-color: #004099; }
 
-         button.mini.secondary { color: var(--pfp-secondary-text); background-color: var(--pfp-swal-button-secondary-color); border-color: var(--pfp-swal-button-secondary-color); }
-          button.mini.secondary:hover { background-color: var(--pfp-swal-button-secondary-hover); border-color: var(--pfp-swal-button-secondary-hover); }
+         button.mini.secondary { color: #fff; background-color: #6c757d; border-color: #6c757d; }
+          button.mini.secondary:hover { background-color: #545b62; border-color: #4a5258; }
 
 
         :root { /* CSS Variables for theming */
@@ -540,31 +541,56 @@ function addPanelCSS() {
             color: var(--pfp-secondary-text) !important;
         }
         .swal2-actions button.mini.secondary:hover {
-            background-color: var(--pfp-swal-button-secondary-hover) !important; border-color: var(--pfp-swal-button-secondary-hover) !important;
+            background-color: var(--pfp-secondary-hover) !important; border-color: var(--pfp-secondary-hover) !important;
         }
 
 
         /* Toast Specific Styling */
         .pfp-swal-toast-popup {
-            box-shadow: 0 3px 10px var(--pfp-shadow-color) !important; padding: 10px 15px !important;
-            font-size: 13px !important; line-height: 1.4 !important; border-radius: 6px !important;
-            background: var(--pfp-bg-color) !important; color: var(--pfp-text-color) !important;
-            border: 1px solid var(--pfp-border-color) !important;
-            backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important;
+            /* Modern Toast Styles */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important; /* Softer shadow */
+            padding: 12px 18px !important; /* Increased padding */
+            font-size: 14px !important; /* Slightly larger font */
+            line-height: 1.5 !important;
+            border-radius: 8px !important; /* More rounded corners */
+            background: var(--pfp-bg-color) !important; /* Use panel background */
+            color: var(--pfp-text-color) !important; /* Use panel text color */
+            border: 1px solid var(--pfp-border-color) !important; /* Use panel border color */
+            backdrop-filter: blur(6px) !important; /* Slightly less blur */
+            -webkit-backdrop-filter: blur(6px) !important;
             z-index: 10000002 !important; /* Ensure toasts are on top of everything, including modals */
+            display: flex !important; /* Use flexbox for alignment */
+            align-items: center !important; /* Vertically align items */
         }
+
         .pfp-swal-toast-popup .swal2-title {
-            margin: 0 !important; font-size: 14px !important; font-weight: normal !important;
-            text-align: center !important;
+            margin: 0 !important;
+            font-size: 14px !important; /* Keep title font size consistent with body */
+            font-weight: normal !important;
+            text-align: left !important; /* Align text left */
+             flex-grow: 1; /* Allow title to take available space */
         }
         .pfp-swal-toast-popup .swal2-icon {
-            margin-right: 10px !important; margin-left: 0 !important; width: 25px !important; height: 25px !important;
+            margin-right: 12px !important; /* Increased space after icon */
+            margin-left: 0 !important;
+            width: 28px !important; /* Slightly larger icon */
+            height: 28px !important;
+             flex-shrink: 0; /* Prevent icon from shrinking */
         }
-        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 18px !important; }
-        .pfp-swal-toast-popup .swal2-close { position: absolute; top: 5px; right: 5px; }
+        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 20px !important; /* Adjust icon content size */ }
+        .pfp-swal-toast-popup .swal2-close {
+             position: static !important; /* Position close button inline */
+             margin-left: 10px !important; /* Space before close button */
+             padding: 4px !important; /* Padding for easier clicking */
+             transition: opacity 0.2s ease;
+             opacity: 0.7;
+         }
+         .pfp-swal-toast-popup .swal2-close:hover {
+             opacity: 1;
+         }
 
         `);
 }
 
-// Note: No IIFE wrapper needed in this file if the main script uses one,
-// as the functions and constants defined here will be added to the main script's scope.
+// Assumes these HTML strings and the addPanelCSS function will be used during initialization
+// to add the UI elements and styles to the page.
