@@ -12,8 +12,8 @@
 // 'getPackInputs' from src/domUtils.js,
 // 'SELECTOR', 'FULL_PAGE_CHECKBOX_ID',
 // 'AUTO_FILL_LOADED_CHECKBOX_ID', 'FILL_EMPTY_ONLY_CHECKBOX_ID',
-// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID', DARK_MODE_CHECKBOX_ID,
-// NOISE_SEED_INPUT_ID from src/constants.js,
+// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID', DARK_MODE_CHECKBOX_ID
+// from src/constants.js,
 // and GM_log are available via @require.
 
 /* --- UI Event Binding --- */
@@ -57,13 +57,6 @@ function bindPanelEvents(config) { // Accept config here
             applyDarkMode(config, e.target.checked); // Pass config
         }
     });
-
-    // Noise Seed Input (Debounced Save)
-    $(`#${NOISE_SEED_INPUT_ID}`).on('input change', function() { // Uses NOISE_SEED_INPUT_ID from src/constants.js
-         GM_log(`Pack Filler Pro: Noise Seed input changed to: ${this.value}`); // Debugging log
-         updateConfigFromUI(config); // Pass config
-         debouncedSaveConfig(config); // Pass config
-    });
 
 
     // Panel Close Button
@@ -166,7 +159,7 @@ function updatePanelVisibility(config, isVisible, position = null) { // Accept c
 // Loads the saved configuration values into the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID, NOISE_SEED_INPUT_ID are available.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID are available.
 /**
  * Loads the saved configuration values into the UI elements.
  * @param {object} config - The script's configuration object.
@@ -187,8 +180,6 @@ function loadConfigIntoUI(config) { // Accept config here
     $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly);
     // Load state for the new checkbox
     $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked', config.scrollToBottomAfterLoad);
-    // Load state for the new seed input
-    $(`#${NOISE_SEED_INPUT_ID}`).val(config.noiseSeed);
 
 
     // Apply initial panel position from config
@@ -203,8 +194,7 @@ function loadConfigIntoUI(config) { // Accept config here
 // Updates the 'config' object based on the current values in the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, MAX_QTY, clamp,
 // FULL_PAGE_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
-// NOISE_SEED_INPUT_ID are available.
+// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID are available.
 /**
  * Updates the config object based on the current UI state.
  * @param {object} config - The script's configuration object to update.
@@ -225,8 +215,6 @@ function updateConfigFromUI(config) { // Accept config here
     config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).is(':checked');
     // Update state for the new checkbox
     config.scrollToBottomAfterLoad = $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).is(':checked');
-    // Update state for the new seed input
-    config.noiseSeed = $(`#${NOISE_SEED_INPUT_ID}`).val();
 
 
     // Ensure quantities are within valid bounds after reading
