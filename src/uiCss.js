@@ -5,7 +5,8 @@
 // Assumes GM_addStyle and MAX_QTY are accessible.
 // Assumes PANEL_ID, TOGGLE_BUTTON_ID, FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID are accessible constants.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID, PATTERN_TYPE_SELECT_ID, PATTERN_PARAMS_DIV_ID,
+// NOISE_SEED_INPUT_ID, PATTERN_SCALE_INPUT_ID, PATTERN_INTENSITY_INPUT_ID are accessible constants.
 
 /* --- UI Panel HTML --- */
 const panelHTML = `
@@ -49,7 +50,35 @@ const panelHTML = `
              </div>
           </div>
 
-          <div class="pfp-options-divider">Options</div>
+            <div class="pfp-options-divider">Fill Pattern</div>
+
+            <div class="pfp-form-group">
+                <label for="${PATTERN_TYPE_SELECT_ID}" class="pfp-label">Pattern Type:</label>
+                <select id="${PATTERN_TYPE_SELECT_ID}" class="pfp-select">
+                    <option value="random">Random (Default)</option>
+                    <option value="perlin">Noise Pattern</option>
+                    <option value="gradient">Gradient</option>
+                    <option value="alternating">Alternating</option>
+                </select>
+            </div>
+
+            <div id="${PATTERN_PARAMS_DIV_ID}" class="pfp-pattern-options">
+                 <div class="pfp-form-group">
+                    <label for="${NOISE_SEED_INPUT_ID}" class="pfp-label">Noise Seed (empty for random):</label>
+                    <input type="text" id="${NOISE_SEED_INPUT_ID}" class="pfp-input" placeholder="e.g., 12345" />
+                 </div>
+                 <div class="pfp-form-group">
+                    <label for="${PATTERN_SCALE_INPUT_ID}" class="pfp-label">Pattern Scale:</label>
+                    <input type="range" id="${PATTERN_SCALE_INPUT_ID}" min="10" max="1000" step="10" class="pfp-input" />
+                    <span id="pfp-pattern-scale-value" class="pfp-range-value">100</span>
+                 </div>
+                  <div class="pfp-form-group">
+                    <label for="${PATTERN_INTENSITY_INPUT_ID}" class="pfp-label">Pattern Intensity:</label>
+                    <input type="range" id="${PATTERN_INTENSITY_INPUT_ID}" min="0" max="100" step="1" class="pfp-input" />
+                    <span id="pfp-pattern-intensity-value" class="pfp-range-value">1.0</span>
+                 </div>
+            </div>
+                      <div class="pfp-options-divider">Options</div>
 
           <div class="pfp-form-check">
             <input type="checkbox" id="pfp-clear" class="pfp-checkbox" />
@@ -165,6 +194,7 @@ function addPanelCSS() {
              --pfp-swal-button-secondary-hover: var(--pfp-secondary-hover);
              --pfp-swal-button-text: var(--pfp-header-text);
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
+             --pfp-range-value-color: #666; /* Color for range value display */
         }
 
         /* Dark Mode Variables */
@@ -200,6 +230,7 @@ function addPanelCSS() {
              --pfp-swal-button-secondary-hover: var(--pfp-secondary-hover);
              --pfp-swal-button-text: var(--pfp-header-text);
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
+             --pfp-range-value-color: #b0b0b0; /* Color for range value display in dark mode */
         }
 
 
@@ -366,6 +397,25 @@ function addPanelCSS() {
         .pfp-select:focus {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
         }
+
+        /* New Pattern Options Styling */
+        .pfp-pattern-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between pattern parameter groups */
+        }
+
+        .pfp-pattern-options .pfp-form-group {
+            margin-bottom: 0; /* Remove default margin-bottom */
+        }
+
+        .pfp-range-value {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--pfp-range-value-color);
+            text-align: right;
+        }
 
 
         .pfp-options-divider {
@@ -594,3 +644,4 @@ function addPanelCSS() {
 
 // Assumes these HTML strings and the addPanelCSS function will be used during initialization
 // to add the UI elements and styles to the page.
+
