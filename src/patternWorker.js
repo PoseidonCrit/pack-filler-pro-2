@@ -1,13 +1,16 @@
-// This is a Web Worker script for performing heavy pattern calculations off the main thread.
-// It should be loaded via a separate @require directive in the main UserScript file.
+// This file contains the code for the Web Worker as a string.
+// It will be used by the main script to create a Blob URL for the worker.
 
-// Assumes clamp and perlinNoise functions are available or implemented here.
-// Since this is a separate file, we need to include necessary helper functions or import them.
-// For simplicity, let's include a basic perlinNoise implementation here.
+// The worker code needs to be self-contained, including any necessary helper functions.
 
-// Basic Perlin Noise implementation (needs to be self-contained in the worker)
+const workerCode = `
+// This code runs inside the Web Worker.
+
+// Helper to clamp a value within min/max bounds (local to worker)
+const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
+
+// Basic Perlin Noise implementation (simplified for demonstration, local to worker)
 function perlinNoise(x, seed) {
-    // Simple deterministic hash for seeding
     const hash = (n) => {
         let i = (n * 0x1357) ^ seed;
         return (i * i * 0x8295) >>> 0;
@@ -36,17 +39,13 @@ function perlinNoise(x, seed) {
     return lerp(grad0, grad1, t_faded);
 }
 
-// Helper to clamp a value within min/max bounds (also needed in worker)
-const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
-
-
 // Pattern calculation logic for the worker
 const WorkerFillStrategies = {
-     // Perlin Noise based strategy (replicated from fillLogic)
      perlin: (index, total, config) => {
          const seed = config.noiseSeed === '' ? Date.now() : parseInt(config.noiseSeed, 10);
          const scale = config.patternScale || 100;
          const intensity = config.patternIntensity || 1.0;
+         const MAX_QTY = 99; // Define MAX_QTY locally in the worker
 
          const noiseInput = (index / total) * scale;
          const noiseValue = perlinNoise(noiseInput, seed);
@@ -59,7 +58,7 @@ const WorkerFillStrategies = {
          let quantity = minQty + range / 2 + scaledNoise;
 
          quantity = clamp(quantity, minQty, maxQty);
-         quantity = clamp(Math.round(quantity), 0, 99); // Clamp to MAX_QTY (99)
+         quantity = clamp(Math.round(quantity), 0, MAX_QTY);
 
          return quantity;
      },
@@ -74,16 +73,15 @@ self.onmessage = (e) => {
     let currentTotal = 0;
     const useMaxTotal = config.maxTotalAmount > 0;
     const maxTotalAmount = config.maxTotalAmount;
-    const fillEmptyOnly = config.fillEmptyOnly; // Worker needs to know this, but filtering happens on main thread
-
-    GM_log(`Pack Filler Pro Worker: Received message to calculate pattern "${strategy}" for ${count} packs.`);
+    // fillEmptyOnly is handled on the main thread when selecting inputsToActuallyFill
 
     // Select the appropriate strategy function
     const strategyFn = WorkerFillStrategies[strategy];
 
     if (!strategyFn) {
-        GM_log(`Pack Filler Pro Worker: Unknown strategy "${strategy}". Aborting.`);
-        self.postMessage([]); // Send empty array on error
+        // Use self.postMessage for logging from worker back to main thread
+        self.postMessage({ type: 'log', data: [\`Pack Filler Pro Worker: Unknown strategy "${strategy}". Aborting.\`] });
+        self.postMessage({ type: 'result', quantities: [] }); // Send empty array on error
         return;
     }
 
@@ -109,18 +107,25 @@ self.onmessage = (e) => {
         }
     }
 
-    GM_log(`Pack Filler Pro Worker: Calculation complete. Sending ${quantities.length} quantities.`);
+    self.postMessage({ type: 'log', data: [\`Pack Filler Pro Worker: Calculation complete. Sending ${quantities.length} quantities.\`] });
     // Send the calculated quantities back to the main script
-    self.postMessage(quantities);
+    self.postMessage({ type: 'result', quantities: quantities });
 };
 
-// Add GM_log polyfill for worker context if needed (optional, depends on Tampermonkey/Violentmonkey)
-// In some environments, GM_log might not be available in workers.
-// If logs from the worker are needed, a simple postMessage logging mechanism could be implemented.
-// Example:
+// Optional: Simple logging mechanism from worker to main thread
+// This requires the main thread to listen for messages with type 'log'
 /*
 function GM_log(...args) {
     self.postMessage({ type: 'log', data: args });
 }
 */
+`;
+
+// Export the worker code as a string
+// This variable 'workerCode' will be available in the main script due to @require
+// and can be used to create the worker via a Blob URL.
+// Note: The name 'patternWorker_js' is derived from the filename by Tampermonkey/Violentmonkey
+// when using @require. We will rely on this convention in the main script.
+
+// We don't need an IIFE wrapper here anymore, just the string definition.
 
