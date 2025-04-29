@@ -77,12 +77,7 @@ const panelHTML = `
           </div>
 
 
-          <div class="pfp-form-check">
-            <input type="checkbox" id="${DARK_MODE_CHECKBOX_ID}" class="pfp-checkbox" />
-            <label for="${DARK_MODE_CHECKBOX_ID}" class="pfp-label pfp-label-inline">Enable Dark Mode</label>
-          </div>
-
-          <div class="pfp-form-actions">
+                              <div class="pfp-form-actions">
             <button id="pfp-run" class="pfp-button pfp-button-primary" title="Fill pack inputs based on current settings">Fill Packs</button>
             <button id="pfp-clear-btn" class="pfp-button pfp-button-secondary" title="Set all pack inputs to zero">Clear All</button>
             </div>
@@ -131,7 +126,7 @@ function addPanelCSS() {
           button.mini.secondary:hover { background-color: #545b62; border-color: #4a5258; }
 
 
-        :root { /* CSS Variables for theming */
+        :root { /* CSS Variables for theming (Simplified - No Dark Mode) */
             --pfp-bg-color: rgba(255, 255, 255, 0.95);
             --pfp-border-color: rgba(0, 0, 0, 0.1);
             --pfp-shadow-color: rgba(0, 0, 0, 0.25);
@@ -167,7 +162,8 @@ function addPanelCSS() {
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
         }
 
-        /* Dark Mode Variables */
+        /* Removed Dark Mode Variables */
+        /*
         .pfp-panel.dark-mode, .pfp-swal-popup.dark-mode, .pfp-swal-toast-popup.dark-mode {
             --pfp-bg-color: rgba(40, 44, 52, 0.9);
             --pfp-border-color: rgba(255, 255, 255, 0.15);
@@ -201,6 +197,7 @@ function addPanelCSS() {
              --pfp-swal-button-text: var(--pfp-header-text);
              --pfp-swal-button-secondary-text: var(--pfp-secondary-text);
         }
+        */
 
 
         .pfp-panel {
@@ -255,10 +252,13 @@ function addPanelCSS() {
         .pfp-header:active { cursor: grabbing; }
 
 
+        /* Removed Dark Mode Header Style */
+        /*
         .pfp-panel.dark-mode .pfp-header {
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         }
+        */
 
 
         .pfp-title {
@@ -330,16 +330,21 @@ function addPanelCSS() {
             color: var(--pfp-text-color);
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
         }
+        /* Removed Dark Mode Input Style */
+        /*
         .pfp-panel.dark-mode .pfp-input,
         .pfp-panel.dark-mode .pfp-select {
              box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
         }
+        */
 
         .pfp-input::placeholder { color: #999; }
-        .pfp-panel.dark-mode .pfp-input::placeholder { color: #777; }
+        /* Removed Dark Mode Placeholder Style */
+        /* .pfp-panel.dark-mode .pfp-input::placeholder { color: #777; } */
 
         .pfp-input:hover, .pfp-select:hover { border-color: rgba(0, 0, 0, 0.2); }
-        .pfp-panel.dark-mode .pfp-input:hover, .pfp-panel.dark-mode .pfp-select:hover { border-color: rgba(255, 255, 255, 0.2); }
+        /* Removed Dark Mode Hover Style */
+        /* .pfp-panel.dark-mode .pfp-input:hover, .pfp-panel.dark-mode .pfp-select:hover { border-color: rgba(255, 255, 255, 0.2); } */
 
 
         .pfp-input:focus,
@@ -358,13 +363,16 @@ function addPanelCSS() {
             padding-right: 35px;
             cursor: pointer;
         }
+        /* Removed Dark Mode Select Style */
+        /*
         .pfp-panel.dark-mode .pfp-select {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23b0b0b0'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
         }
+        */
 
 
         .pfp-select:focus {
-             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
+             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3csvg%3e");
         }
 
 
@@ -403,9 +411,12 @@ function addPanelCSS() {
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3csvg%3e");
             background-size: 100% 100%; background-repeat: no-repeat;
         }
+        /* Removed Dark Mode Checkbox Checked Style */
+        /*
         .pfp-panel.dark-mode .pfp-checkbox:checked {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3csvg%3e");
         }
+        */
 
 
         .pfp-checkbox:focus {
@@ -458,8 +469,12 @@ function addPanelCSS() {
         .pfp-toggle-button:hover { background-color: var(--pfp-primary-hover); transform: scale(1.05); }
         .pfp-toggle-button:active { transform: scale(0.95); }
 
+        /* Removed Dark Mode Toggle Button Style */
+        /*
         .pfp-panel.dark-mode + .pfp-toggle-button { background: var(--pfp-primary-color); color: var(--pfp-header-text); }
         .pfp-panel.dark-mode + .pfp-toggle-button:hover { background-color: var(--pfp-primary-hover); }
+        */
+
 
         .pfp-footer {
             margin-top: 10px;
@@ -537,7 +552,7 @@ function addPanelCSS() {
         }
 
         .swal2-actions button.mini.secondary {
-            background-color: var(--pfp-swal-button-secondary-color) !important; border-color: var(--pfp-swal-button-secondary-color) !important;
+            background-color: var(--pfp-secondary-color) !important; border-color: var(--pfp-secondary-color) !important;
             color: var(--pfp-secondary-text) !important;
         }
         .swal2-actions button.mini.secondary:hover {
@@ -547,47 +562,22 @@ function addPanelCSS() {
 
         /* Toast Specific Styling */
         .pfp-swal-toast-popup {
-            /* Modern Toast Styles */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important; /* Softer shadow */
-            padding: 12px 18px !important; /* Increased padding */
-            font-size: 14px !important; /* Slightly larger font */
-            line-height: 1.5 !important;
-            border-radius: 8px !important; /* More rounded corners */
-            background: var(--pfp-bg-color) !important; /* Use panel background */
-            color: var(--pfp-text-color) !important; /* Use panel text color */
-            border: 1px solid var(--pfp-border-color) !important; /* Use panel border color */
-            backdrop-filter: blur(6px) !important; /* Slightly less blur */
-            -webkit-backdrop-filter: blur(6px) !important;
+            box-shadow: 0 3px 10px var(--pfp-shadow-color) !important; padding: 10px 15px !important;
+            font-size: 13px !important; line-height: 1.4 !important; border-radius: 6px !important;
+            background: var(--pfp-bg-color) !important; color: var(--pfp-text-color) !important;
+            border: 1px solid var(--pfp-border-color) !important;
+            backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important;
             z-index: 10000002 !important; /* Ensure toasts are on top of everything, including modals */
-            display: flex !important; /* Use flexbox for alignment */
-            align-items: center !important; /* Vertically align items */
         }
-
         .pfp-swal-toast-popup .swal2-title {
-            margin: 0 !important;
-            font-size: 14px !important; /* Keep title font size consistent with body */
-            font-weight: normal !important;
-            text-align: left !important; /* Align text left */
-             flex-grow: 1; /* Allow title to take available space */
+            margin: 0 !important; font-size: 14px !important; font-weight: normal !important;
+            text-align: center !important;
         }
         .pfp-swal-toast-popup .swal2-icon {
-            margin-right: 12px !important; /* Increased space after icon */
-            margin-left: 0 !important;
-            width: 28px !important; /* Slightly larger icon */
-            height: 28px !important;
-             flex-shrink: 0; /* Prevent icon from shrinking */
+            margin-right: 10px !important; margin-left: 0 !important; width: 25px !important; height: 25px !important;
         }
-        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 20px !important; /* Adjust icon content size */ }
-        .pfp-swal-toast-popup .swal2-close {
-             position: static !important; /* Position close button inline */
-             margin-left: 10px !important; /* Space before close button */
-             padding: 4px !important; /* Padding for easier clicking */
-             transition: opacity 0.2s ease;
-             opacity: 0.7;
-         }
-         .pfp-swal-toast-popup .swal2-close:hover {
-             opacity: 1;
-         }
+        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 18px !important; }
+        .pfp-swal-toast-popup .swal2-close { position: absolute; top: 5px; right: 5px; }
 
         `);
 }
