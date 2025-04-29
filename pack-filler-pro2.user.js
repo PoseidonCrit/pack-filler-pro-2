@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         🎴F105.26 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.25 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.26
+// @version      🎴F105.25
 // @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
@@ -53,8 +53,7 @@
     // Assumes functions like SWAL_ALERT, SWAL_TOAST
     // are defined in src/swalHelpers.js and available here due to @require.
 
-    // Assumes functions like calculateFillCount, chooseQuantity, distribute, fillPacks,
-    // setSeed, seededRandom
+    // Assumes functions like calculateFillCount, chooseQuantity, distribute, fillPacks
     // are defined in src/fillLogic.js and available here due to @require.
 
     // Assumes functions like loadFullPageIfNeeded
@@ -107,7 +106,7 @@
              return; // Stop initialization if config is bad
         }
 
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}, Noise Seed: "${config.noiseSeed}"`);
+        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}`);
 
         // 3. Add CSS
         // Calls the addPanelCSS function from src/uiCss.js
