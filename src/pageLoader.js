@@ -115,14 +115,14 @@ async function loadFullPageIfNeeded(config) { // Accept config as a parameter
     // Optional: Show a final toast message
     const finalInputCount = getPackInputs().length; // Uses getPackInputs from src/domUtils.js
     if (finalInputCount > initialInputCount) {
-        SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs. Total: ${finalInputCount}.`, 'success'); // Uses SWAL_TOAST from src/swalHelpers.js
+        SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs. Total: ${finalInputCount}.`, 'success', config); // Pass config to SWAL
     } else if (initialInputCount > 0) {
-        SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially. Total: ${finalInputCount}.`, 'info');
+        SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially. Total: ${finalInputCount}.`, 'info', config); // Pass config to SWAL
     } else {
         if ($('.pack-num-input').length === 0) { // Uses $ from cash-dom
-             SWAL_TOAST('No pack inputs found on the page.', 'info');
+             SWAL_TOAST('No pack inputs found on the page.', 'info', config); // Pass config to SWAL
         } else {
-             SWAL_TOAST(`Auto-load finished. Found ${finalInputCount} packs.`, 'info');
+             SWAL_TOAST(`Auto-load finished. Found ${finalInputCount} packs.`, 'info', config); // Pass config to SWAL
         }
     }
 }
