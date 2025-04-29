@@ -28,7 +28,7 @@ const PATTERN_INTENSITY_INPUT_ID = 'pfp-pattern-intensity'; // ID for pattern in
 // Default settings for the script.
 // This object defines the initial state and structure of the configuration.
 const DEFAULT_CONFIG = {
-    version: 17,        // Incremented config version for ReferenceError fix
+    version: 18,        // Incremented config version for ReferenceError fix refinement
     lastMode: 'fixed',
     lastCount: 10,
     lastFixedQty: 1,
