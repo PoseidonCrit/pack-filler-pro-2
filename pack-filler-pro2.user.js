@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         🎴F105.26 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.27 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.26
+// @version      🎴F105.27
 // @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
@@ -23,7 +23,7 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js 
+// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js
 
 // ==/UserScript==
 
@@ -66,26 +66,22 @@
         GM_log("Pack Filler Pro: Essential libraries (cash-dom, SweetAlert2) found.");
 
         // 2. Initialize Web Worker
-        // Check if the Worker class is available and if the worker script was loaded via @require.
-        // Note: @require for workers might behave differently across UserScript managers.
-        // A more robust approach might involve dynamically creating the worker from a Blob.
-        // For now, assuming @require makes the worker code available globally under the filename.
-        if (typeof Worker !== 'undefined' && typeof patternWorker_js !== 'undefined') {
+        // Check if the Worker class is available and if the worker code string is available.
+        // 'workerCode' is the variable name exported from patternWorker.js due to @require.
+        if (typeof Worker !== 'undefined' && typeof workerCode !== 'undefined') {
             try {
-                 // Assuming patternWorker_js contains the worker code as a string or function
-                 // A common pattern is to wrap the worker code in a function and convert it to a Blob URL
-                 const workerCode = `(${patternWorker_js})();`; // Assuming patternWorker_js is the function wrapping worker code
                  const blob = new Blob([workerCode], { type: 'application/javascript' });
                  const blobUrl = URL.createObjectURL(blob);
                  patternWorker = new Worker(blobUrl);
                  GM_log("Pack Filler Pro: Web Worker initialized successfully.");
 
-                 // Listen for logs from the worker if implemented
+                 // Listen for messages from the worker
                  patternWorker.onmessage = (e) => {
                       if (e.data && e.data.type === 'log') {
+                           // Handle log messages from the worker
                            GM_log("Pack Filler Pro Worker Log:", ...e.data.data);
                       }
-                      // Handle other worker messages in fillLogic.js
+                      // Other message types (like 'result') are handled in fillLogic.js
                  };
 
                  patternWorker.onerror = (error) => {
@@ -100,7 +96,7 @@
                  SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config); // Use config if available
             }
         } else {
-            GM_log("Pack Filler Pro: Web Worker API or patternWorker.js not available. Pattern features will run on main thread.");
+            GM_log("Pack Filler Pro: Web Worker API or workerCode not available. Pattern features will run on main thread.");
             patternWorker = null; // Ensure worker is null if not supported/loaded
         }
 
