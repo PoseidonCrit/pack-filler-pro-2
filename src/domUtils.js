@@ -40,6 +40,5 @@ function clearAllInputs() {
     }
 }
 
-// Note: No IIFE wrapper needed in this file if the main script uses one,
-// as the functions and constants defined here will be added to the main script's scope.
-// This file does not directly use the 'config' object, so no changes are needed here.
+// The functions getPackInputs, clamp, updateInput, and clearAllInputs are made available
+// to the main script's scope via @require.
