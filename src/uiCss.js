@@ -193,7 +193,7 @@ function addPanelCSS() {
             --pfp-checkbox-checked-border: var(--pfp-secondary-color);
             --pfp-checkbox-checked-check: #000;
             --pfp-range-border: rgba(255, 255, 255, 0.1);
-            --pfp-range-bg: rgba(0, 0, 0, 0.05);
+            --pfp-range-bg: rgba(255, 255, 255, 0.05);
              --pfp-swal-button-primary-color: var(--pfp-primary-color);
              --pfp-swal-button-primary-hover: var(--pfp-primary-hover);
              --pfp-swal-button-secondary-color: var(--pfp-secondary-color);
