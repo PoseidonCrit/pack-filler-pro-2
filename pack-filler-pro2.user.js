@@ -13,7 +13,7 @@
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js
 // @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js
-// // @require      https://cdn.jsdelivr.net/npm/interactjs@2/dist/interact.min.js // Uncomment if needed if using drag
+// // @require      https://cdn.jsdelivr.net/npm/interactjs@2/dist/interact.min.js // Removed interactjs
 // // @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js // Uncomment if needed if using simplebar
 
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
@@ -23,8 +23,8 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/fillLogic.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// //  @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/dragHandler.js // Uncomment if needed if using drag
+// // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js // Will be loaded below
+// // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/dragHandler.js // Removed dragHandler
 
 // ==/UserScript==
 
@@ -36,13 +36,9 @@
 (function() {
     'use strict';
 
-    // Declare global variables that will be populated by required modules
-    // or used across modules. These are declared here to make it explicit
-    // that they are part of the shared scope.
-    // Note: In a more complex setup, you might use a namespace object
-    // (e.g., window.PFP = {};) to avoid polluting the global scope directly.
-    // For UserScripts and simplicity, direct declaration in the IIFE is common.
-    let config; // Will be populated by loadConfig from configManager.js
+    // Declare variables that will be populated during initialization.
+    // 'config' is declared here and will hold the loaded configuration object.
+    let config;
     let panelElement; // Will be populated after adding panel HTML
     let toggleButtonElement; // Will be populated after adding toggle button HTML
     let panelSimpleBarInstance = null; // Will be populated if SimpleBar is used and available
@@ -69,16 +65,16 @@
     // are defined in src/uiCss.js and available here due to @require.
 
     // Assumes functions like bindPanelEvents, updatePanelModeDisplay, updatePanelVisibility,
-    // loadConfigIntoUI, updateConfigFromUI, applyDarkMode
+    // loadConfigIntoUI, updateConfigFromUI, applyDarkMode (removed)
     // are defined in src/uiManager.js and available here due to @require.
 
-    // Assumes function initDrag is defined in src/dragHandler.js and available here due to @require.
+    // Removed @require for dragHandler.js and initDrag function.
 
 
     /* --- Initialize Script --- */
     // This function orchestrates the startup of the script.
     function init() {
-        GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`); // Debugging log
+        GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`);
 
         // 1. Essential Dependency Checks (Libraries)
         // Check if critical external libraries loaded correctly via @require.
@@ -101,9 +97,9 @@
         // 2. Load Configuration
         GM_log("Pack Filler Pro: Attempting to load config."); // Debugging log
         // Calls the loadConfig function from src/configManager.js
-        // Ensure config is assigned before proceeding.
+        // Assign the returned config object to the 'config' variable in this scope.
         config = loadConfig();
-        GM_log("Pack Filler Pro: loadConfig returned:", config); // Debugging log
+        GM_log("Pack Filler Pro: loadConfig returned and assigned to 'config':", config); // Debugging log
 
 
         // Add a check to ensure config is valid after loading
@@ -114,7 +110,7 @@
              return; // Stop initialization if config is bad
         }
 
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Dark Mode: ${config.isDarkMode}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}`);
+        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}`);
 
         // 3. Add CSS
         // Calls the addPanelCSS function from src/uiCss.js
@@ -159,27 +155,21 @@
 
 
         // 6. Apply Initial Configuration to UI and State
-        // Calls functions from src/uiManager.js
-        loadConfigIntoUI();
-        updatePanelModeDisplay(config.lastMode);
+        // Calls functions from src/uiManager.js, passing the config object
+        loadConfigIntoUI(config); // Pass config
+        updatePanelModeDisplay(config.lastMode); // Pass mode from config
         // Pass the initial position from config when setting initial visibility
-        updatePanelVisibility(config.panelVisible, config.panelPos);
-        applyDarkMode(config.isDarkMode); // Apply dark mode based on loaded config
+        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config
 
 
         // 7. Bind Events
-        // Calls the bindPanelEvents function from src/uiManager.js
-        bindPanelEvents();
+        // Calls the bindPanelEvents function from src/uiManager.js, passing the config object
+        bindPanelEvents(config); // Pass config
 
 
-        // 8. Initialize Drag Functionality (Optional)
-        // Check if interactjs library is available before initializing drag.
-        if (typeof window.interact !== 'undefined') {
-             // Calls the initDrag function from src/dragHandler.js
-             initDrag(panelElement);
-        } else {
-            GM_log("Pack Filler Pro: interactjs library not available. Drag functionality disabled.");
-        }
+        // 8. Initialize Drag Functionality (Removed)
+        // Removed the check for interactjs and the call to initDrag.
+        GM_log("Pack Filler Pro: Drag functionality disabled.");
 
 
         // 9. Trigger Auto-load Full Page if enabled
