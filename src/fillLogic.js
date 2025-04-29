@@ -1,14 +1,21 @@
 // This file contains the main logic for calculating and applying quantities to inputs.
-// It uses constants, config, and DOM helper functions.
-// In a modular setup, this could be a 'fillLogic.js' module.
+// It uses constants and DOM helper functions.
+// Note: This module now accepts the 'config' object as a parameter where needed.
 
-// Assumes 'config', 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
+// Assumes 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
 // 'clearAllInputs', 'SWAL_ALERT', 'SWAL_TOAST', and 'updateConfigFromUI'
 // (or a mechanism to get current UI state) are accessible.
 
 /* --- Core Logic --- */
- // Determines how many packs to target based on mode and available inputs
- function calculateFillCount(mode, requestedCount, availablePackCount) {
+ /**
+  * Determines how many packs to target based on mode and available inputs.
+  * @param {object} config - The script's configuration object.
+  * @param {number} availablePackCount - The total number of visible pack inputs.
+  * @returns {number} The calculated number of packs to fill.
+  */
+ function calculateFillCount(config, availablePackCount) { // Accept config here
+     const mode = config.lastMode;
+     const requestedCount = config.lastCount;
      const count = parseInt(requestedCount, 10) || 0;
      switch (mode) {
          case 'fixed':
@@ -21,8 +28,17 @@
      }
  }
 
- // Determines the quantity for a single pack based on mode and settings
- function chooseQuantity(mode, fixedQty, minQty, maxQty) {
+ /**
+  * Determines the quantity for a single pack based on mode and settings.
+  * @param {object} config - The script's configuration object.
+  * @returns {number} The calculated quantity for a single pack.
+  */
+ function chooseQuantity(config) { // Accept config here
+     const mode = config.lastMode;
+     const fixedQty = config.lastFixedQty;
+     const minQty = config.lastMinQty;
+     const maxQty = config.lastMaxQty;
+
      const fQty = parseInt(fixedQty, 10) || 0;
      const mnQty = parseInt(minQty, 10) || 0; // Allow min 0
      const mxQty = parseInt(maxQty, 10) || 0; // Allow min 0
@@ -81,13 +97,14 @@ function distribute(n, total) {
 
 /**
  * Fills pack inputs based on current settings.
+ * @param {object} config - The script's configuration object.
  * @param {boolean} isAutoFill - True if triggered by the auto-load process.
  */
-function fillPacks(isAutoFill = false) {
+function fillPacks(config, isAutoFill = false) { // Accept config here
     // Read current values from UI inputs before filling (only for manual trigger)
     if (!isAutoFill) {
         // Assumes updateConfigFromUI is available to sync UI state to config
-        updateConfigFromUI();
+        updateConfigFromUI(config); // Pass config
         // Debounced save handled by input/change listeners in UI Events module
     }
 
@@ -108,7 +125,7 @@ function fillPacks(isAutoFill = false) {
      if (mode === 'unlimited') {
           potentialInputsToFill = inputs; // All visible
      } else {
-           const fillCount = calculateFillCount(mode, count, availablePacks); // Assumes calculateFillCount is accessible
+           const fillCount = calculateFillCount(config, availablePacks); // Pass config
           potentialInputsToFill = inputs.slice(0, fillCount);
      }
     const targetedCount = potentialInputsToFill.length;
@@ -161,7 +178,7 @@ function fillPacks(isAutoFill = false) {
 
         if (mode === 'max') {
             // Random Count (Range) mode
-            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Assumes chooseQuantity is accessible
+            qty = chooseQuantity(config); // Pass config
 
             // If Max Total is active in Random mode, adjust quantity if it exceeds the remaining total
             if (useMaxTotal) {
@@ -173,7 +190,7 @@ function fillPacks(isAutoFill = false) {
             }
         } else {
             // Fixed Count or Unlimited mode (Max Total only applies here as a cap)
-            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Assumes chooseQuantity is accessible
+            qty = chooseQuantity(config); // Pass config
 
              if (useMaxTotal) {
                  const remaining = maxTotalAmount - currentTotal;
@@ -247,4 +264,5 @@ function fillPacks(isAutoFill = false) {
      }
  }
 
-// Assumes the 'fillPacks' function will be called by UI event handlers or initialization.
+// The functions calculateFillCount, chooseQuantity, and fillPacks are made available
+// to the main script's scope via @require.
