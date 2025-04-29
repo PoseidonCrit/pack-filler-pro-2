@@ -49,26 +49,19 @@ const FillStrategies = {
          // This requires the perlinNoise and clamp functions to be available
          // in the main thread's scope if the worker fails.
          // For now, we'll rely on the worker. If fallback is essential,
-         // we might need to include perlinNoise/clamp in domUtils or another file.
-         // For this iteration, we'll keep it simple and log a warning.
+         // we might need to include perlinNoise/clamp in domUtils or similar.
+         // For this iteration, this is a placeholder indicating where the fallback logic would go.
+         // A more robust solution would ensure perlinNoise is available in the main thread.
          GM_log("Pack Filler Pro: Perlin noise calculation falling back to main thread (worker failed). Performance may be impacted.");
          // Replicate logic from worker (requires clamp and perlinNoise in this scope)
          // Assuming clamp and perlinNoise are available globally if this fallback is hit
          // Note: perlinNoise is NOT currently available in the main thread scope.
          // This fallback will fail unless perlinNoise is added to domUtils or similar.
-         // For now, this is a placeholder indicating where the fallback logic would go.
-         // A more robust solution would ensure perlinNoise is available in the main thread.
-         const seed = config.noiseSeed === '' ? Date.now() : parseInt(config.noiseSeed, 10);
-         const scale = config.patternScale || 100;
-         const intensity = config.patternIntensity || 1.0;
-         const MAX_QTY = 99;
-
-         // Placeholder for actual perlin calculation on main thread
-         // This part needs perlinNoise function to be available in this scope
          // For now, returning a simple random value as a temporary fallback
          GM_log("Pack Filler Pro: Perlin noise fallback not fully implemented on main thread. Using random quantity.");
          const minQty = config.lastMinQty;
          const maxQty = config.lastMaxQty;
+         const MAX_QTY = 99; // Define MAX_QTY locally
          const clampedMin = clamp(minQty, 0, MAX_QTY);
          const clampedMax = clamp(maxQty, 0, MAX_QTY);
          if (clampedMin > clampedMax) return 0;
@@ -272,14 +265,14 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     let currentTotal = 0; // Track total added in this fill operation
     let maxTotalHit = false;
 
-    // Declare strategy outside the try block
-    let strategy;
+    // Declare strategy outside the try block and initialize it
+    let strategy = getFillStrategy(config, false); // Initialize with the intended strategy
+
 
     // --- Core Filling Logic ---
     // Determine quantities based on pattern or mode
     if (patternType && patternType !== 'random') {
          // Use pattern strategy (potentially offloaded to worker)
-         strategy = getFillStrategy(config, false); // Get the intended strategy
          const totalPacksToFill = inputsToActuallyFill.length;
 
          // Check if we should use the worker for heavy patterns (like Perlin) AND worker is available
@@ -343,7 +336,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
          } else {
              // Calculate pattern quantities on the main thread (for non-Perlin patterns or if worker is unavailable)
              GM_log(`Pack Filler Pro: Calculating pattern (${patternType}) on main thread.`);
-             strategy = getFillStrategy(config, false); // Get main thread strategy
+             // strategy is already initialized above
              const totalPacksToFill = inputsToActuallyFill.length; // Recalculate total packs to fill
 
              inputsToActuallyFill.forEach((input, index) => {
