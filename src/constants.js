@@ -35,7 +35,7 @@ const DEFAULT_CONFIG = {
     maxTotalAmount: 0,
     autoFillLoaded: false,
     fillEmptyOnly: false, // Fill empty only option
-    scrollToBottomAfterLoad: true // New option: Defaulting to FALSE
+    scrollToBottomAfterLoad: FALSE // New option: Defaulting to FALSE
 };
 
 // Declare global variables that will be used and modified by other modules.
