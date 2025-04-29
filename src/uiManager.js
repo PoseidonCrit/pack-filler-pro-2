@@ -1,22 +1,26 @@
 // This file handles updating the UI based on config, updating config from UI,
-// applying dark mode, and binding event listeners to UI elements.
-// It relies heavily on the cash-dom library ($) and the 'config' object.
+// and binding event listeners to UI elements.
+// It relies heavily on the cash-dom library ($).
+// Note: This module now accepts the 'config' object as a parameter where needed.
 // It also includes the MutationObserver for dynamic updates.
-// It assumes '$' from cash-dom, 'config', 'panelElement', 'toggleButtonElement',
+
+// It assumes '$' from cash-dom, 'panelElement', 'toggleButtonElement',
 // 'panelSimpleBarInstance' from the main script's scope or src/constants.js,
 // 'fillPacks' from src/fillLogic.js,
 // 'clearAllInputs' from src/domUtils.js,
 // 'debouncedSaveConfig' from src/configManager.js,
-// 'applyDarkMode' from this file,
 // 'getPackInputs' from src/domUtils.js,
-// 'SELECTOR', 'DARK_MODE_CHECKBOX_ID', 'FULL_PAGE_CHECKBOX_ID',
+// 'SELECTOR', 'FULL_PAGE_CHECKBOX_ID',
 // 'AUTO_FILL_LOADED_CHECKBOX_ID', 'FILL_EMPTY_ONLY_CHECKBOX_ID',
 // 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID' from src/constants.js,
 // and GM_log are available via @require.
 
 /* --- UI Event Binding --- */
-// Binds event listeners to the UI panel elements.
-function bindPanelEvents() {
+/**
+ * Binds event listeners to the UI panel elements.
+ * @param {object} config - The script's configuration object.
+ */
+function bindPanelEvents(config) { // Accept config here
     GM_log("Pack Filler Pro: bindPanelEvents started."); // Debugging log
 
     // Assumes $, panelElement, toggleButtonElement are available
@@ -24,7 +28,7 @@ function bindPanelEvents() {
     // Fill Packs Button
     $('#pfp-run').on('click', () => {
         GM_log("Pack Filler Pro: 'Fill Packs' button clicked."); // Debugging log
-        fillPacks(); // Uses fillPacks from src/fillLogic.js
+        fillPacks(config); // Pass config
     });
 
     // Clear All Button
@@ -37,32 +41,35 @@ function bindPanelEvents() {
     $('#pfp-mode').on('change', function() {
         GM_log(`Pack Filler Pro: Mode changed to ${this.value}.`); // Debugging log
         updatePanelModeDisplay(this.value); // Uses updatePanelModeDisplay from this file
-        updateConfigFromUI(); // Uses updateConfigFromUI from this file
-        debouncedSaveConfig(); // Uses debouncedSaveConfig from src/configManager.js
+        updateConfigFromUI(config); // Pass config
+        debouncedSaveConfig(config); // Pass config
     });
 
     // Input/Checkbox/Select Changes (Debounced Save)
     $(panelElement).on('input change', '.pfp-input, .pfp-select, .pfp-checkbox', function(e) {
         GM_log(`Pack Filler Pro: Input/Change event on element ID: ${e.target.id}, Value: ${e.target.value || e.target.checked}`); // Debugging log
-        updateConfigFromUI(); // Uses updateConfigFromUI from this file
-        debouncedSaveConfig(); // Uses debouncedSaveConfig from src/configManager.js
+        updateConfigFromUI(config); // Pass config
+        debouncedSaveConfig(config); // Pass config
 
+        // Removed Dark Mode toggle logic
+        /*
         if (e.target.id === DARK_MODE_CHECKBOX_ID) { // Uses DARK_MODE_CHECKBOX_ID from src/constants.js
-            applyDarkMode(e.target.checked); // Uses applyDarkMode from this file
+            applyDarkMode(config, e.target.checked); // Pass config
         }
+        */
     });
 
 
     // Panel Close Button
     $(panelElement).find('.pfp-close').on('click', () => {
         GM_log("Pack Filler Pro: Panel close button clicked."); // Debugging log
-        updatePanelVisibility(false); // Uses updatePanelVisibility from this file
+        updatePanelVisibility(config, false); // Pass config
     });
 
     // Toggle Button
     $(toggleButtonElement).on('click', () => {
         GM_log("Pack Filler Pro: Toggle button clicked."); // Debugging log
-        updatePanelVisibility(true); // Uses updatePanelVisibility from this file
+        updatePanelVisibility(config, true); // Pass config
     });
 
     // MutationObserver to update max count and simplebar when inputs are added
@@ -116,9 +123,15 @@ function updatePanelModeDisplay(mode) {
 // Uses $ (cash-dom) for brevity
 // Updates the visibility of the panel and saves the visibility state.
 // Can also apply a specific position and save it.
-// Assumes panelElement, toggleButtonElement, config, panelSimpleBarInstance,
+// Assumes panelElement, toggleButtonElement, panelSimpleBarInstance,
 // and debouncedSaveConfig are available.
-function updatePanelVisibility(isVisible, position = null) {
+/**
+ * Updates the visibility of the panel and saves the visibility/position state.
+ * @param {object} config - The script's configuration object.
+ * @param {boolean} isVisible - Whether the panel should be visible.
+ * @param {object} [position=null] - Optional position object {top, right, bottom, left} to apply.
+ */
+function updatePanelVisibility(config, isVisible, position = null) { // Accept config here
     if (!panelElement || !toggleButtonElement) return;
 
     $(panelElement).toggleClass('hidden', !isVisible);
@@ -140,15 +153,19 @@ function updatePanelVisibility(isVisible, position = null) {
             right: panelElement.style.right
         };
     }
-    debouncedSaveConfig(); // Uses debouncedSaveConfig
+    debouncedSaveConfig(config); // Pass config
 }
 
 // Uses $ (cash-dom) for brevity
 // Loads the saved configuration values into the UI elements.
-// Assumes panelElement, config, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
-// DARK_MODE_CHECKBOX_ID, MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID,
-// FILL_EMPTY_ONLY_CHECKBOX_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
-function loadConfigIntoUI() {
+// Assumes panelElement, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
+// MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
+// SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
+/**
+ * Loads the saved configuration values into the UI elements.
+ * @param {object} config - The script's configuration object.
+ */
+function loadConfigIntoUI(config) { // Accept config here
     if (!panelElement) return;
 
     $('#pfp-mode').val(config.lastMode);
@@ -158,7 +175,7 @@ function loadConfigIntoUI() {
     $('#pfp-max').val(config.lastMaxQty);
     $('#pfp-clear').prop('checked', config.lastClear);
     $(`#${FULL_PAGE_CHECKBOX_ID}`).prop('checked', config.loadFullPage);
-    $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode);
+    // $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode); // Removed Dark Mode
     $(`#${MAX_TOTAL_INPUT_ID}`).val(config.maxTotalAmount);
     $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked', config.autoFillLoaded);
     $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly);
@@ -176,11 +193,14 @@ function loadConfigIntoUI() {
 
 // Uses $ (cash-dom) for brevity
 // Updates the 'config' object based on the current values in the UI elements.
-// Assumes panelElement, config, DEFAULT_CONFIG, MAX_QTY, clamp,
-// FULL_PAGE_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID, MAX_TOTAL_INPUT_ID,
-// AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
-function updateConfigFromUI() {
+// Assumes panelElement, DEFAULT_CONFIG, MAX_QTY, clamp,
+// FULL_PAGE_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
+// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID are available.
+/**
+ * Updates the config object based on the current UI state.
+ * @param {object} config - The script's configuration object to update.
+ */
+function updateConfigFromUI(config) { // Accept config here
     if (!panelElement) return;
 
     config.lastMode = $('#pfp-mode').val() || DEFAULT_CONFIG.lastMode;
@@ -190,7 +210,7 @@ function updateConfigFromUI() {
     config.lastMaxQty = parseInt($('#pfp-max').val(), 10) || 0;
     config.lastClear = $('#pfp-clear').is(':checked');
     config.loadFullPage = $(`#${FULL_PAGE_CHECKBOX_ID}`).is(':checked');
-    config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked');
+    // config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked'); // Removed Dark Mode
     config.maxTotalAmount = parseInt($(`#${MAX_TOTAL_INPUT_ID}`).val(), 10) || 0;
     config.autoFillLoaded = $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).is(':checked');
     config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).is(':checked');
@@ -211,17 +231,7 @@ function updateConfigFromUI() {
     GM_log("Pack Filler Pro: Config updated from UI."); // Assumes GM_log is available
 }
 
-// Uses $ (cash-dom) for brevity
-// Applies or removes the 'dark-mode' class to the panel and recalculates SimpleBar.
-// Assumes panelElement and panelSimpleBarInstance are available.
-function applyDarkMode(isDark) {
-    if (!panelElement) return;
-    $(panelElement).toggleClass('dark-mode', isDark);
-    if (panelSimpleBarInstance) {
-        panelSimpleBarInstance.recalculate();
-    }
-    GM_log(`Pack Filler Pro: Dark Mode ${isDark ? 'enabled' : 'disabled'}.`); // Assumes GM_log is available
-}
+// Removed applyDarkMode function
 
-// Note: No IIFE wrapper needed in this file if the main script uses one,
-// as the functions defined here will be added to the main script's scope.
+// The functions updatePanelModeDisplay, updatePanelVisibility, loadConfigIntoUI,
+// and updateConfigFromUI are made available to the main script's scope via @require.
