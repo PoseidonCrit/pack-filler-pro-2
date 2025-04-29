@@ -21,14 +21,14 @@ const PATTERN_TYPE_SELECT_ID = 'pfp-pattern-type'; // ID for pattern type select
 const PATTERN_PARAMS_DIV_ID = 'pfp-pattern-params'; // ID for pattern parameters div
 const NOISE_SEED_INPUT_ID = 'pfp-noise-seed'; // ID for noise seed input
 const PATTERN_SCALE_INPUT_ID = 'pfp-pattern-scale'; // ID for pattern scale input
-const PATTERN_INTENSITY_INPUT_ID = 'pfp-pattern-intensity'; // ID for pattern intensity input (added)
+const PATTERN_INTENSITY_INPUT_ID = 'pfp-pattern-intensity'; // ID for pattern intensity input
 
 
 /* --- Default Configuration --- */
 // Default settings for the script.
 // This object defines the initial state and structure of the configuration.
 const DEFAULT_CONFIG = {
-    version: 15,        // Incremented config version for new pattern options
+    version: 16,        // Incremented config version for worker fix
     lastMode: 'fixed',
     lastCount: 10,
     lastFixedQty: 1,
