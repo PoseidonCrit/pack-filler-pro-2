@@ -228,7 +228,7 @@ function addPanelCSS() {
             pointer-events: none;
         }
 
-        /* Add position classes for drag/snap */
+        /* Add position classes for drag/snap (Keeping these for initial positioning) */
         .pfp-panel.pos-left { left: 16px; right: auto; }
         .pfp-panel.pos-right { right: 16px; left: auto; }
         .pfp-panel.pos-bottom { bottom: 16px; top: auto; } /* New class for snapped bottom */
@@ -239,7 +239,7 @@ function addPanelCSS() {
             background: var(--pfp-header-bg);
             color: var(--pfp-header-text);
             padding: 14px 20px;
-            cursor: grab;
+            /* Removed cursor: grab; */
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -247,18 +247,15 @@ function addPanelCSS() {
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             border-top-left-radius: var(--pfp-border-radius);
             border-top-right-radius: var(--pfp-border-radius);
-            touch-action: none;
+            /* Removed touch-action: none; */
         }
-        .pfp-header:active { cursor: grabbing; }
+        /* Removed .pfp-header:active { cursor: grabbing; } */
 
 
-        /* Removed Dark Mode Header Style */
-        /*
         .pfp-panel.dark-mode .pfp-header {
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         }
-        */
 
 
         .pfp-title {
@@ -330,21 +327,16 @@ function addPanelCSS() {
             color: var(--pfp-text-color);
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
         }
-        /* Removed Dark Mode Input Style */
-        /*
         .pfp-panel.dark-mode .pfp-input,
         .pfp-panel.dark-mode .pfp-select {
              box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
         }
-        */
 
         .pfp-input::placeholder { color: #999; }
-        /* Removed Dark Mode Placeholder Style */
-        /* .pfp-panel.dark-mode .pfp-input::placeholder { color: #777; } */
+        .pfp-panel.dark-mode .pfp-input::placeholder { color: #777; }
 
         .pfp-input:hover, .pfp-select:hover { border-color: rgba(0, 0, 0, 0.2); }
-        /* Removed Dark Mode Hover Style */
-        /* .pfp-panel.dark-mode .pfp-input:hover, .pfp-panel.dark-mode .pfp-select:hover { border-color: rgba(255, 255, 255, 0.2); } */
+        .pfp-panel.dark-mode .pfp-input:hover, .pfp-panel.dark-mode .pfp-select:hover { border-color: rgba(255, 255, 255, 0.2); }
 
 
         .pfp-input:focus,
@@ -363,16 +355,13 @@ function addPanelCSS() {
             padding-right: 35px;
             cursor: pointer;
         }
-        /* Removed Dark Mode Select Style */
-        /*
         .pfp-panel.dark-mode .pfp-select {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23b0b0b0'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
         }
-        */
 
 
         .pfp-select:focus {
-             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3csvg%3e");
+             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='var(--pfp-focus-color)'%3e%3cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3e%3c/svg%3e");
         }
 
 
@@ -411,12 +400,9 @@ function addPanelCSS() {
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3csvg%3e");
             background-size: 100% 100%; background-repeat: no-repeat;
         }
-        /* Removed Dark Mode Checkbox Checked Style */
-        /*
         .pfp-panel.dark-mode .pfp-checkbox:checked {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3csvg%3e");
         }
-        */
 
 
         .pfp-checkbox:focus {
@@ -469,12 +455,8 @@ function addPanelCSS() {
         .pfp-toggle-button:hover { background-color: var(--pfp-primary-hover); transform: scale(1.05); }
         .pfp-toggle-button:active { transform: scale(0.95); }
 
-        /* Removed Dark Mode Toggle Button Style */
-        /*
         .pfp-panel.dark-mode + .pfp-toggle-button { background: var(--pfp-primary-color); color: var(--pfp-header-text); }
         .pfp-panel.dark-mode + .pfp-toggle-button:hover { background-color: var(--pfp-primary-hover); }
-        */
-
 
         .pfp-footer {
             margin-top: 10px;
