@@ -17,16 +17,25 @@
 /* --- UI Event Binding --- */
 // Binds event listeners to the UI panel elements.
 function bindPanelEvents() {
+    GM_log("Pack Filler Pro: bindPanelEvents started."); // Debugging log
+
     // Assumes $, panelElement, toggleButtonElement are available
 
     // Fill Packs Button
-    $('#pfp-run').on('click', () => fillPacks()); // Uses fillPacks from src/fillLogic.js
+    $('#pfp-run').on('click', () => {
+        GM_log("Pack Filler Pro: 'Fill Packs' button clicked."); // Debugging log
+        fillPacks(); // Uses fillPacks from src/fillLogic.js
+    });
 
     // Clear All Button
-    $('#pfp-clear-btn').on('click', () => clearAllInputs()); // Uses clearAllInputs from src/domUtils.js
+    $('#pfp-clear-btn').on('click', () => {
+        GM_log("Pack Filler Pro: 'Clear All' button clicked."); // Debugging log
+        clearAllInputs(); // Uses clearAllInputs from src/domUtils.js
+    });
 
     // Mode Selection Change
     $('#pfp-mode').on('change', function() {
+        GM_log(`Pack Filler Pro: Mode changed to ${this.value}.`); // Debugging log
         updatePanelModeDisplay(this.value); // Uses updatePanelModeDisplay from this file
         updateConfigFromUI(); // Uses updateConfigFromUI from this file
         debouncedSaveConfig(); // Uses debouncedSaveConfig from src/configManager.js
@@ -34,6 +43,7 @@ function bindPanelEvents() {
 
     // Input/Checkbox/Select Changes (Debounced Save)
     $(panelElement).on('input change', '.pfp-input, .pfp-select, .pfp-checkbox', function(e) {
+        GM_log(`Pack Filler Pro: Input/Change event on element ID: ${e.target.id}, Value: ${e.target.value || e.target.checked}`); // Debugging log
         updateConfigFromUI(); // Uses updateConfigFromUI from this file
         debouncedSaveConfig(); // Uses debouncedSaveConfig from src/configManager.js
 
@@ -45,11 +55,13 @@ function bindPanelEvents() {
 
     // Panel Close Button
     $(panelElement).find('.pfp-close').on('click', () => {
+        GM_log("Pack Filler Pro: Panel close button clicked."); // Debugging log
         updatePanelVisibility(false); // Uses updatePanelVisibility from this file
     });
 
     // Toggle Button
     $(toggleButtonElement).on('click', () => {
+        GM_log("Pack Filler Pro: Toggle button clicked."); // Debugging log
         updatePanelVisibility(true); // Uses updatePanelVisibility from this file
     });
 
@@ -69,7 +81,7 @@ function bindPanelEvents() {
          if (inputsAdded) {
              const currentInputCount = getPackInputs().length; // Uses getPackInputs from src/domUtils.js
              $('#pfp-count').attr('max', currentInputCount); // Uses $ from cash-dom
-             GM_log(`Pack Filler Pro: Detected new inputs. Updated count max to ${currentInputCount}.`); // Assumes GM_log is available
+             GM_log(`Pack Filler Pro: Detected new inputs via MutationObserver. Updated count max to ${currentInputCount}.`); // Assumes GM_log is available
              if (panelSimpleBarInstance) { // Assumes panelSimpleBarInstance is available
                  panelSimpleBarInstance.recalculate();
              }
@@ -83,6 +95,8 @@ function bindPanelEvents() {
      } else {
           GM_log(`Pack Filler Pro: Could not find a container to observe for new inputs.`);
      }
+
+     GM_log("Pack Filler Pro: bindPanelEvents finished."); // Debugging log
 }
 
 
