@@ -13,7 +13,6 @@
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js
 // @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js
-// // @require      https://cdn.jsdelivr.net/npm/interactjs@2/dist/interact.min.js // Removed interactjs
 // // @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js // Uncomment if needed if using simplebar
 
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
@@ -23,8 +22,7 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/fillLogic.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
-// // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js // Will be loaded below
-// // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/dragHandler.js // Removed dragHandler
+// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
 
 // ==/UserScript==
 
@@ -65,10 +63,8 @@
     // are defined in src/uiCss.js and available here due to @require.
 
     // Assumes functions like bindPanelEvents, updatePanelModeDisplay, updatePanelVisibility,
-    // loadConfigIntoUI, updateConfigFromUI, applyDarkMode (removed)
+    // loadConfigIntoUI, updateConfigFromUI
     // are defined in src/uiManager.js and available here due to @require.
-
-    // Removed @require for dragHandler.js and initDrag function.
 
 
     /* --- Initialize Script --- */
@@ -156,15 +152,15 @@
 
         // 6. Apply Initial Configuration to UI and State
         // Calls functions from src/uiManager.js, passing the config object
-        loadConfigIntoUI(config); // Pass config
+        loadConfigIntoUI(config); // Pass config here
         updatePanelModeDisplay(config.lastMode); // Pass mode from config
         // Pass the initial position from config when setting initial visibility
-        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config
+        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config here
 
 
         // 7. Bind Events
         // Calls the bindPanelEvents function from src/uiManager.js, passing the config object
-        bindPanelEvents(config); // Pass config
+        bindPanelEvents(config); // Pass config here
 
 
         // 8. Initialize Drag Functionality (Removed)
@@ -178,6 +174,7 @@
         if (config.loadFullPage) {
             GM_log("Pack Filler Pro: Auto-load is enabled, scheduling loadFullPageIfNeeded."); // Debugging log
             // Delay slightly to allow page rendering
+            // Ensure config is passed correctly in the setTimeout callback
             setTimeout(() => loadFullPageIfNeeded(config), 300); // Pass config here
         } else {
             GM_log("Pack Filler Pro: Auto-load is disabled."); // Debugging log
