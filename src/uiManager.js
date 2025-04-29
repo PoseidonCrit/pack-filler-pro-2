@@ -12,7 +12,9 @@
 // 'getPackInputs' from src/domUtils.js,
 // 'SELECTOR', 'FULL_PAGE_CHECKBOX_ID',
 // 'AUTO_FILL_LOADED_CHECKBOX_ID', 'FILL_EMPTY_ONLY_CHECKBOX_ID',
-// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID', DARK_MODE_CHECKBOX_ID
+// 'MAX_TOTAL_INPUT_ID', 'SCROLL_TO_BOTTOM_CHECKBOX_ID', DARK_MODE_CHECKBOX_ID,
+// PATTERN_TYPE_SELECT_ID, PATTERN_PARAMS_DIV_ID, NOISE_SEED_INPUT_ID,
+// PATTERN_SCALE_INPUT_ID, PATTERN_INTENSITY_INPUT_ID
 // from src/constants.js,
 // and GM_log are available via @require.
 
@@ -27,9 +29,12 @@ function bindPanelEvents(config) { // Accept config here
     // Assumes $, panelElement, toggleButtonElement are available
 
     // Fill Packs Button
-    $('#pfp-run').on('click', () => {
+    $('#pfp-run').on('click', async () => { // Make async to await fillPacks
         GM_log("Pack Filler Pro: 'Fill Packs' button clicked."); // Debugging log
-        fillPacks(config); // Pass config
+        // Ensure config is updated from UI before filling
+        updateConfigFromUI(config); // Pass config
+        debouncedSaveConfig(config); // Save config immediately on manual trigger
+        await fillPacks(config); // Pass config and await the async fillPacks
     });
 
     // Clear All Button
@@ -46,8 +51,32 @@ function bindPanelEvents(config) { // Accept config here
         debouncedSaveConfig(config); // Pass config
     });
 
+    // Pattern Type Selection Change
+    $(`#${PATTERN_TYPE_SELECT_ID}`).on('change', function() {
+        GM_log(`Pack Filler Pro: Pattern type changed to ${this.value}.`);
+        updatePatternParamsDisplay(this.value); // New function to show/hide params
+        updateConfigFromUI(config); // Update config with new pattern type
+        debouncedSaveConfig(config); // Save config
+    });
+
+    // Update range value display for Pattern Scale
+    $(`#${PATTERN_SCALE_INPUT_ID}`).on('input', function() {
+        $('#pfp-pattern-scale-value').text($(this).val());
+        // Config update and save handled by the general input/change listener below
+    });
+
+     // Update range value display for Pattern Intensity
+    $(`#${PATTERN_INTENSITY_INPUT_ID}`).on('input', function() {
+        // Convert range value (0-100) to a float (0.0-1.0)
+        const intensityValue = (parseInt($(this).val(), 10) / 100).toFixed(2);
+        $('#pfp-pattern-intensity-value').text(intensityValue);
+        // Config update and save handled by the general input/change listener below
+    });
+
+
     // Input/Checkbox/Select Changes (Debounced Save)
-    $(panelElement).on('input change', '.pfp-input, .pfp-select, .pfp-checkbox', function(e) {
+    $(panelElement).on('input change', `.pfp-input, .pfp-select, .pfp-checkbox, #${NOISE_SEED_INPUT_ID}, #${PATTERN_SCALE_INPUT_ID}, #${PATTERN_INTENSITY_INPUT_ID}`, function(e) {
+        // Added new pattern input IDs to the selector
         GM_log(`Pack Filler Pro: Input/Change event on element ID: ${e.target.id}, Value: ${e.target.value || e.target.checked}`); // Debugging log
         updateConfigFromUI(config); // Pass config
         debouncedSaveConfig(config); // Pass config
@@ -102,6 +131,28 @@ function bindPanelEvents(config) { // Accept config here
           GM_log(`Pack Filler Pro: Could not find a container to observe for new inputs.`);
      }
 
+     // Add MutationObserver to disconnect SweetAlert2 observers on modal close
+     // This helps prevent memory leaks from Swal's internal observers
+     const swalCloseObserver = new MutationObserver((mutationsList) => {
+         mutationsList.forEach(mutation => {
+             mutation.removedNodes.forEach(removedNode => {
+                 if (removedNode.nodeType === 1 && removedNode.classList.contains('swal2-container')) {
+                     GM_log("Pack Filler Pro: Detected SweetAlert2 modal removed. Disconnecting Swal observers.");
+                     // SweetAlert2 manages its own internal observers, but ensuring the main
+                     // Swal instance is cleaned up or checking for specific Swal observer
+                     // instances might be necessary in complex scenarios.
+                     // For now, we log the removal. If memory issues persist, a more
+                     // aggressive approach might be needed, potentially involving
+                     // accessing Swal's internal state (if possible and safe).
+                     // The swalObserver in applyDarkMode is handled there.
+                 }
+             });
+         });
+     });
+     swalCloseObserver.observe(document.body, { childList: true });
+     GM_log("Pack Filler Pro: Observing body for SweetAlert2 modal removal.");
+
+
      GM_log("Pack Filler Pro: bindPanelEvents finished."); // Debugging log
 }
 
@@ -117,7 +168,38 @@ function updatePanelModeDisplay(mode) {
     $('#pfp-count-group').toggle(isFixed || isRandom);
     $('#pfp-fixed-group').toggle(isFixed || isUnlimited);
     $('#pfp-range-inputs').toggle(isRandom);
+
+     // Pattern options are always visible now, but their parameters might change
+     // updatePatternParamsDisplay is called separately on pattern type change
 }
+
+/**
+ * Updates the visibility of pattern parameter inputs based on the selected pattern type.
+ * @param {string} patternType - The selected pattern type ('random', 'perlin', 'gradient', 'alternating').
+ */
+function updatePatternParamsDisplay(patternType) {
+     const isPerlin = patternType === 'perlin';
+     const isGradient = patternType === 'gradient';
+     const isAlternating = patternType === 'alternating';
+     const isRandom = patternType === 'random'; // Random has no specific params
+
+     // Hide all pattern specific params initially
+     $(`#${PATTERN_PARAMS_DIV_ID} .pfp-form-group`).hide();
+
+     // Show parameters relevant to the selected pattern type
+     if (isPerlin) {
+          $(`#${PATTERN_PARAMS_DIV_ID} #${NOISE_SEED_INPUT_ID}`).closest('.pfp-form-group').show();
+          $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_SCALE_INPUT_ID}`).closest('.pfp-form-group').show();
+          $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_INTENSITY_INPUT_ID}`).closest('.pfp-form-group').show();
+     } else if (isGradient) {
+          $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_INTENSITY_INPUT_ID}`).closest('.pfp-form-group').show();
+          $(`#${PATTERN_PARAMS_DIV_ID} #${PATTERN_SCALE_INPUT_ID}`).closest('.pfp-form-group').show(); // Scale can affect gradient smoothness
+     } else if (isAlternating) {
+          // Alternating currently has no specific parameters in the UI
+     }
+     // Random has no specific parameters to show
+}
+
 
 // Uses $ (cash-dom) for brevity
 // Updates the visibility of the panel and saves the visibility state.
@@ -159,7 +241,8 @@ function updatePanelVisibility(config, isVisible, position = null) { // Accept c
 // Loads the saved configuration values into the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, FULL_PAGE_CHECKBOX_ID,
 // MAX_TOTAL_INPUT_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID are available.
+// SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID, PATTERN_TYPE_SELECT_ID,
+// NOISE_SEED_INPUT_ID, PATTERN_SCALE_INPUT_ID, PATTERN_INTENSITY_INPUT_ID are available.
 /**
  * Loads the saved configuration values into the UI elements.
  * @param {object} config - The script's configuration object.
@@ -174,12 +257,26 @@ function loadConfigIntoUI(config) { // Accept config here
     $('#pfp-max').val(config.lastMaxQty);
     $('#pfp-clear').prop('checked', config.lastClear);
     $(`#${FULL_PAGE_CHECKBOX_ID}`).prop('checked', config.loadFullPage);
-    $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode); // Re-added Dark Mode
+    $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode); // Dark Mode
     $(`#${MAX_TOTAL_INPUT_ID}`).val(config.maxTotalAmount);
     $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked', config.autoFillLoaded);
     $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly);
-    // Load state for the new checkbox
+    // Load state for the scroll to bottom checkbox
     $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked', config.scrollToBottomAfterLoad);
+
+    // Load new pattern options into UI
+    $(`#${PATTERN_TYPE_SELECT_ID}`).val(config.patternType);
+    $(`#${NOISE_SEED_INPUT_ID}`).val(config.noiseSeed);
+    $(`#${PATTERN_SCALE_INPUT_ID}`).val(config.patternScale);
+    $(`#${PATTERN_INTENSITY_INPUT_ID}`).val(config.patternIntensity * 100); // Convert float 0-1 to int 0-100
+
+    // Update range value displays
+    $('#pfp-pattern-scale-value').text(config.patternScale);
+    $('#pfp-pattern-intensity-value').text(config.patternIntensity.toFixed(2));
+
+    // Update display based on loaded mode and pattern type
+    updatePanelModeDisplay(config.lastMode);
+    updatePatternParamsDisplay(config.patternType);
 
 
     // Apply initial panel position from config
@@ -194,7 +291,9 @@ function loadConfigIntoUI(config) { // Accept config here
 // Updates the 'config' object based on the current values in the UI elements.
 // Assumes panelElement, DEFAULT_CONFIG, MAX_QTY, clamp,
 // FULL_PAGE_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, FILL_EMPTY_ONLY_CHECKBOX_ID,
-// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID are available.
+// MAX_TOTAL_INPUT_ID, SCROLL_TO_BOTTOM_CHECKBOX_ID, DARK_MODE_CHECKBOX_ID,
+// PATTERN_TYPE_SELECT_ID, NOISE_SEED_INPUT_ID, PATTERN_SCALE_INPUT_ID,
+// PATTERN_INTENSITY_INPUT_ID are available.
 /**
  * Updates the config object based on the current UI state.
  * @param {object} config - The script's configuration object to update.
@@ -209,12 +308,18 @@ function updateConfigFromUI(config) { // Accept config here
     config.lastMaxQty = parseInt($('#pfp-max').val(), 10) || 0;
     config.lastClear = $('#pfp-clear').is(':checked');
     config.loadFullPage = $(`#${FULL_PAGE_CHECKBOX_ID}`).is(':checked');
-    config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked'); // Re-added Dark Mode
+    config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).is(':checked'); // Dark Mode
     config.maxTotalAmount = parseInt($(`#${MAX_TOTAL_INPUT_ID}`).val(), 10) || 0;
     config.autoFillLoaded = $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).is(':checked');
     config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).is(':checked');
-    // Update state for the new checkbox
+    // Update state for the scroll to bottom checkbox
     config.scrollToBottomAfterLoad = $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).is(':checked');
+
+    // Update new pattern options from UI
+    config.patternType = $(`#${PATTERN_TYPE_SELECT_ID}`).val() || DEFAULT_CONFIG.patternType;
+    config.noiseSeed = $(`#${NOISE_SEED_INPUT_ID}`).val(); // Keep as string
+    config.patternScale = parseInt($(`#${PATTERN_SCALE_INPUT_ID}`).val(), 10) || DEFAULT_CONFIG.patternScale;
+    config.patternIntensity = parseFloat((parseInt($(`#${PATTERN_INTENSITY_INPUT_ID}`).val(), 10) / 100).toFixed(2)) || DEFAULT_CONFIG.patternIntensity; // Convert int 0-100 to float 0-1
 
 
     // Ensure quantities are within valid bounds after reading
@@ -226,6 +331,11 @@ function updateConfigFromUI(config) { // Accept config here
          [config.lastMinQty, config.lastMaxQty] = [config.lastMaxQty, config.lastMinQty];
     }
     config.maxTotalAmount = Math.max(0, config.maxTotalAmount);
+
+    // Ensure pattern scale and intensity are within bounds
+    config.patternScale = clamp(config.patternScale, 10, 1000);
+    config.patternIntensity = clamp(config.patternIntensity, 0.0, 1.0);
+
 
     GM_log("Pack Filler Pro: Config updated from UI."); // Assumes GM_log is available
 }
@@ -246,31 +356,25 @@ function applyDarkMode(config, enable) { // Accept config here
 
     // Apply dark mode class to SweetAlert2 popups dynamically
     // SweetAlert2 adds popups directly to the body, so we observe the body
-    const swalObserver = new MutationObserver((mutationsList) => {
-        for (const mutation of mutationsList) {
-            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === 1 && (node.classList.contains('swal2-popup') || node.classList.contains('swal2-toast-popup'))) {
-                        $(node).toggleClass('dark-mode', enable);
-                    }
-                });
-            }
-        }
-    });
-
-    // Start observing the body for added SweetAlert2 popups
-    // Use a global flag or check if observer is already running to avoid duplicates
+    // Ensure this observer is only created once and properly disconnected.
     if (!window._pfpSwalObserver) {
-         swalObserver.observe(document.body, { childList: true });
-         window._pfpSwalObserver = swalObserver; // Store the observer instance
-    } else {
-         // If observer already exists, stop it, disconnect, and restart with the new mode
-         window._pfpSwalObserver.disconnect();
-         swalObserver.observe(document.body, { childList: true });
-         window._pfpSwalObserver = swalObserver;
+         window._pfpSwalObserver = new MutationObserver((mutationsList) => {
+             for (const mutation of mutationsList) {
+                 if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                     mutation.addedNodes.forEach(node => {
+                         if (node.nodeType === 1 && (node.classList.contains('swal2-popup') || node.classList.contains('swal2-toast-popup'))) {
+                             $(node).toggleClass('dark-mode', config.isDarkMode); // Use current config state
+                         }
+                     });
+                 }
+             }
+         });
+         // Start observing the body for added SweetAlert2 popups
+         window._pfpSwalObserver.observe(document.body, { childList: true });
+         GM_log("Pack Filler Pro: SweetAlert2 popup observer started.");
     }
 
-    // Also apply to any existing SweetAlert2 popups that might be open
+    // Update the dark mode state on any currently open SweetAlert2 popups
     $('.swal2-popup, .swal2-toast-popup').toggleClass('dark-mode', enable);
 
     config.isDarkMode = enable; // Update config state
@@ -279,4 +383,6 @@ function applyDarkMode(config, enable) { // Accept config here
 
 
 // The functions updatePanelModeDisplay, updatePanelVisibility, loadConfigIntoUI,
-// updateConfigFromUI, and applyDarkMode are made available to the main script's scope via @require.
+// updateConfigFromUI, updatePatternParamsDisplay, and applyDarkMode are made available
+// to the main script's scope via @require.
+
