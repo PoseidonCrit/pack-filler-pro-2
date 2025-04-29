@@ -242,7 +242,7 @@ function addPanelCSS() {
             box-shadow: 0 10px 30px var(--pfp-shadow-color), 0 0 0 1px var(--pfp-border-color);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
             color: var(--pfp-text-color);
-            z-index: 1000001;
+            z-index: 1000001; /* Ensure panel is above most things */
             transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
@@ -500,7 +500,8 @@ function addPanelCSS() {
             background: var(--pfp-primary-color); color: var(--pfp-header-text);
             border: none; border-radius: 50%; box-shadow: 0 4px 15px var(--pfp-shadow-color);
             cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center;
-            z-index: 1000000; transition: background-color 0.2s ease, transform 0.2s ease;
+            z-index: 1000000; /* Ensure toggle button is below panel but above most content */
+            transition: background-color 0.2s ease, transform 0.2s ease;
              bottom: auto; /* Ensure bottom is not set */
         }
          .pfp-toggle-button.hidden { display: none; }
