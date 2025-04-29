@@ -31,11 +31,11 @@ const DEFAULT_CONFIG = {
     loadFullPage: true, // Setting this to TRUE as requested
     panelVisible: true,
     panelPos: { top: '120px', right: '30px', left: 'auto', bottom: 'auto' }, // Default panel position (top right)
-    isDarkMode: false,
+    isDarkMode: true,
     maxTotalAmount: 0,
     autoFillLoaded: false,
     fillEmptyOnly: false, // Fill empty only option
-    scrollToBottomAfterLoad: false // New option: Defaulting to FALSE
+    scrollToBottomAfterLoad: true // New option: Defaulting to FALSE
 };
 
 // Declare global variables that will be used and modified by other modules.
