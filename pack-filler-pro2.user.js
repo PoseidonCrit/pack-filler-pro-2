@@ -100,7 +100,17 @@
 
         // 2. Load Configuration
         // Calls the loadConfig function from src/configManager.js
+        // Ensure config is assigned before proceeding.
         config = loadConfig();
+
+        // Add a check to ensure config is valid after loading
+        if (!config || typeof config.loadFullPage === 'undefined') {
+             const errorMessage = "Failed to load configuration. Script cannot run correctly.";
+             GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
+             alert(`Pack Filler Pro Error: ${errorMessage}`);
+             return; // Stop initialization if config is bad
+        }
+
         GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Dark Mode: ${config.isDarkMode}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}`);
 
         // 3. Add CSS
@@ -171,9 +181,10 @@
 
         // 9. Trigger Auto-load Full Page if enabled
         // Calls the loadFullPageIfNeeded function from src/pageLoader.js
+        // Pass the config object explicitly to ensure it's available.
         if (config.loadFullPage) {
             // Delay slightly to allow page rendering
-            setTimeout(() => loadFullPageIfNeeded(), 300);
+            setTimeout(() => loadFullPageIfNeeded(config), 300); // Pass config here
         } else {
             // If not auto-loading, ensure the max count for the count input is set based on initially visible inputs
             // Uses $ from cash-dom and getPackInputs from src/domUtils.js
