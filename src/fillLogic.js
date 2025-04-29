@@ -1,10 +1,9 @@
-// This block contains the main logic for calculating and applying quantities to inputs.
+// This file contains the main logic for calculating and applying quantities to inputs.
 // It uses constants, config, and DOM helper functions.
-// In a modular setup, this could be a 'fillLogic.js' module.
-
-// Assumes 'config', 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
-// 'clearAllInputs', 'SWAL_ALERT', 'SWAL_TOAST', and 'updateConfigFromUI'
-// (or a mechanism to get current UI state) are accessible.
+// It assumes 'config', 'MAX_QTY' from src/constants.js,
+// 'getPackInputs', 'clamp', 'updateInput', 'clearAllInputs' from src/domUtils.js,
+// 'SWAL_ALERT', 'SWAL_TOAST' from src/swalHelpers.js,
+// and 'updateConfigFromUI' from src/uiManager.js are available via @require.
 
 /* --- Core Logic --- */
  // Determines how many packs to target based on mode and available inputs
@@ -13,6 +12,7 @@
      switch (mode) {
          case 'fixed':
          case 'max':
+              // Uses clamp from src/domUtils.js
               return clamp(count, 0, availablePackCount);
          case 'unlimited':
               return availablePackCount;
@@ -30,6 +30,7 @@
      switch (mode) {
          case 'fixed':
          case 'unlimited':
+              // Uses clamp from src/domUtils.js and MAX_QTY from src/constants.js
               return clamp(fQty, 0, MAX_QTY);
          case 'max':
               const min = Math.min(mnQty, mxQty);
@@ -47,6 +48,7 @@
 
 // This function is primarily used internally now when Max Total is NOT active in Random mode.
 // The logic for Max Total in Random mode is now handled directly in fillPacks.
+// Uses clamp from src/domUtils.js and MAX_QTY from src/constants.js
 function distribute(n, total) {
     if (n <= 0 || total <= 0 || isNaN(n) || isNaN(total)) return Array(n).fill(0);
 
@@ -82,13 +84,17 @@ function distribute(n, total) {
 /**
  * Fills pack inputs based on current settings.
  * @param {boolean} isAutoFill - True if triggered by the auto-load process.
+ * Assumes 'config' is available from the main script's scope.
+ * Assumes updateConfigFromUI from src/uiManager.js is available.
+ * Assumes getPackInputs, clamp, updateInput, clearAllInputs from src/domUtils.js are available.
+ * Assumes SWAL_ALERT, SWAL_TOAST from src/swalHelpers.js are available.
  */
 function fillPacks(isAutoFill = false) {
     // Read current values from UI inputs before filling (only for manual trigger)
     if (!isAutoFill) {
         // Assumes updateConfigFromUI is available to sync UI state to config
         updateConfigFromUI();
-        // Debounced save handled by input/change listeners in UI Events module
+        // Debounced save handled by input/change listeners in UI Events module (in uiManager.js)
     }
 
     // Use config object directly (assumes 'config' is accessible)
@@ -99,7 +105,7 @@ function fillPacks(isAutoFill = false) {
 
     if (availablePacks === 0) {
          if (!isAutoFill) SWAL_ALERT('Fill Packs', 'No visible pack inputs found on the page.', 'warning'); // Assumes SWAL_ALERT is accessible
-         GM_log("Fill operation aborted: No visible pack inputs found.");
+         GM_log("Fill operation aborted: No visible pack inputs found."); // Assumes GM_log is available
          return;
     }
 
@@ -108,7 +114,7 @@ function fillPacks(isAutoFill = false) {
      if (mode === 'unlimited') {
           potentialInputsToFill = inputs; // All visible
      } else {
-           const fillCount = calculateFillCount(mode, count, availablePacks); // Assumes calculateFillCount is accessible
+           const fillCount = calculateFillCount(mode, count, availablePacks); // Uses calculateFillCount from this file
           potentialInputsToFill = inputs.slice(0, fillCount);
      }
     const targetedCount = potentialInputsToFill.length;
@@ -122,7 +128,7 @@ function fillPacks(isAutoFill = false) {
 
     // Apply 'Clear Before Fill' option (only for manual trigger)
     if (clear && !isAutoFill) {
-        clearAllInputs(); // Assumes clearAllInputs is accessible
+        clearAllInputs(); // Uses clearAllInputs from src/domUtils.js
     }
 
     // Apply the 'Fill Empty Only' filter
@@ -161,7 +167,7 @@ function fillPacks(isAutoFill = false) {
 
         if (mode === 'max') {
             // Random Count (Range) mode
-            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Assumes chooseQuantity is accessible
+            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Uses chooseQuantity from this file
 
             // If Max Total is active in Random mode, adjust quantity if it exceeds the remaining total
             if (useMaxTotal) {
@@ -173,7 +179,7 @@ function fillPacks(isAutoFill = false) {
             }
         } else {
             // Fixed Count or Unlimited mode (Max Total only applies here as a cap)
-            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Assumes chooseQuantity is accessible
+            qty = chooseQuantity(mode, fixedQty, minQty, maxQty); // Uses chooseQuantity from this file
 
              if (useMaxTotal) {
                  const remaining = maxTotalAmount - currentTotal;
@@ -185,7 +191,7 @@ function fillPacks(isAutoFill = false) {
         }
 
         // Update the input with the determined quantity
-        updateInput(input, qty); // Assumes updateInput is accessible
+        updateInput(input, qty); // Uses updateInput from src/domUtils.js
         currentTotal += qty; // Add the quantity actually set to the total
     });
 
@@ -247,4 +253,5 @@ function fillPacks(isAutoFill = false) {
      }
  }
 
-// Assumes the 'fillPacks' function will be called by UI event handlers or initialization.
+// Note: No IIFE wrapper needed in this file if the main script uses one,
+// as the functions defined here will be added to the main script's scope.
