@@ -43,11 +43,6 @@ function loadConfig() {
                       cfg.isDarkMode = DEFAULT_CONFIG.isDarkMode;
                       GM_log("Pack Filler Pro: Migrated config to include isDarkMode.");
                  }
-                 // Migration for version 15: Add noiseSeed if missing
-                 if (parsed.version < 15 && typeof cfg.noiseSeed === 'undefined') {
-                      cfg.noiseSeed = DEFAULT_CONFIG.noiseSeed;
-                      GM_log("Pack Filler Pro: Migrated config to include noiseSeed.");
-                 }
                  // Ensure new defaults are applied if migrating from a version without the field
                  Object.keys(DEFAULT_CONFIG).forEach(key => {
                       if (typeof cfg[key] === 'undefined') {
