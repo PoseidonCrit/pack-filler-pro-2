@@ -38,11 +38,8 @@ const DEFAULT_CONFIG = {
     scrollToBottomAfterLoad: false // New option: Defaulting to FALSE
 };
 
-// Declare global variables that will be used and modified by other modules.
-// Declaring them here ensures they are part of the shared scope after @require.
-// These will be initialized or assigned values in the main script's init function
-// or other required modules.
-// Note: 'config' will now be managed explicitly in the main script and passed to functions.
+// Declare variables that will be populated during initialization in the main script.
+// Note: 'config' is now managed explicitly in the main script and passed to functions.
 // Let config; // Removed global config declaration here
 
 let panelElement; // Will be populated after adding panel HTML
