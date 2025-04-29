@@ -24,7 +24,7 @@
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/dragHandler.js // Uncomment if needed if using drag
+// //  @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/dragHandler.js // Uncomment if needed if using drag
 
 // ==/UserScript==
 
@@ -78,7 +78,7 @@
     /* --- Initialize Script --- */
     // This function orchestrates the startup of the script.
     function init() {
-        GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`);
+        GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`); // Debugging log
 
         // 1. Essential Dependency Checks (Libraries)
         // Check if critical external libraries loaded correctly via @require.
@@ -99,13 +99,16 @@
 
 
         // 2. Load Configuration
+        GM_log("Pack Filler Pro: Attempting to load config."); // Debugging log
         // Calls the loadConfig function from src/configManager.js
         // Ensure config is assigned before proceeding.
         config = loadConfig();
+        GM_log("Pack Filler Pro: loadConfig returned:", config); // Debugging log
+
 
         // Add a check to ensure config is valid after loading
         if (!config || typeof config.loadFullPage === 'undefined') {
-             const errorMessage = "Failed to load configuration. Script cannot run correctly.";
+             const errorMessage = "Failed to load configuration or config structure is invalid. Script cannot run correctly.";
              GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
              alert(`Pack Filler Pro Error: ${errorMessage}`);
              return; // Stop initialization if config is bad
@@ -161,7 +164,7 @@
         updatePanelModeDisplay(config.lastMode);
         // Pass the initial position from config when setting initial visibility
         updatePanelVisibility(config.panelVisible, config.panelPos);
-        applyDarkMode(config.isDarkMode);
+        applyDarkMode(config.isDarkMode); // Apply dark mode based on loaded config
 
 
         // 7. Bind Events
@@ -183,16 +186,18 @@
         // Calls the loadFullPageIfNeeded function from src/pageLoader.js
         // Pass the config object explicitly to ensure it's available.
         if (config.loadFullPage) {
+            GM_log("Pack Filler Pro: Auto-load is enabled, scheduling loadFullPageIfNeeded."); // Debugging log
             // Delay slightly to allow page rendering
             setTimeout(() => loadFullPageIfNeeded(config), 300); // Pass config here
         } else {
+            GM_log("Pack Filler Pro: Auto-load is disabled."); // Debugging log
             // If not auto-loading, ensure the max count for the count input is set based on initially visible inputs
             // Uses $ from cash-dom and getPackInputs from src/domUtils.js
             $('#pfp-count').attr('max', getPackInputs().length);
         }
 
 
-        GM_log("Pack Filler Pro: Initialization complete.");
+        GM_log("Pack Filler Pro: Initialization complete."); // Debugging log
     }
 
 
