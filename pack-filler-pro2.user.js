@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         🎴F105.25 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.26 Pack Filler Pro – Sleek Edition
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.25
+// @version      🎴F105.26
 // @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
@@ -53,7 +53,8 @@
     // Assumes functions like SWAL_ALERT, SWAL_TOAST
     // are defined in src/swalHelpers.js and available here due to @require.
 
-    // Assumes functions like calculateFillCount, chooseQuantity, distribute, fillPacks
+    // Assumes functions like calculateFillCount, chooseQuantity, distribute, fillPacks,
+    // setSeed, seededRandom
     // are defined in src/fillLogic.js and available here due to @require.
 
     // Assumes functions like loadFullPageIfNeeded
@@ -63,7 +64,7 @@
     // are defined in src/uiCss.js and available here due to @require.
 
     // Assumes functions like bindPanelEvents, updatePanelModeDisplay, updatePanelVisibility,
-    // loadConfigIntoUI, updateConfigFromUI
+    // loadConfigIntoUI, updateConfigFromUI, applyDarkMode
     // are defined in src/uiManager.js and available here due to @require.
 
 
@@ -106,7 +107,7 @@
              return; // Stop initialization if config is bad
         }
 
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}`);
+        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}, Noise Seed: "${config.noiseSeed}"`);
 
         // 3. Add CSS
         // Calls the addPanelCSS function from src/uiCss.js
@@ -156,6 +157,7 @@
         updatePanelModeDisplay(config.lastMode); // Pass mode from config
         // Pass the initial position from config when setting initial visibility
         updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config here
+        applyDarkMode(config, config.isDarkMode); // Apply dark mode based on loaded config
 
 
         // 7. Bind Events
