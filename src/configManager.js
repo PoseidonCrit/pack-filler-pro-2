@@ -33,6 +33,7 @@ function loadConfig() {
                      GM_log("Pack Filler Pro: Migrated panel position to default top/right.");
                  }
                  // Add migration logic for version 13 if needed (e.g., if scrollToBottomAfterLoad wasn't in older saves)
+                 // Explicitly ensure scrollToBottomAfterLoad is set if missing in older saves
                  if (parsed.version < 13 && typeof cfg.scrollToBottomAfterLoad === 'undefined') {
                       cfg.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
                       GM_log("Pack Filler Pro: Migrated config to include scrollToBottomAfterLoad.");
@@ -105,7 +106,7 @@ const debouncedSaveConfig = (function() {
         clearTimeout(timer);
         // Add a check here to make sure configToSave is not undefined before scheduling save
         if (configToSave) {
-             GM_log("Pack Filler Pro: Debounced save scheduled."); // Debugging log
+             // GM_log("Pack Filler Pro: Debounced save scheduled."); // Too chatty
              timer = setTimeout(() => saveConfig(configToSave), 500); // Pass configToSave to saveConfig
         } else {
              GM_log("Pack Filler Pro: Debounced save called but configToSave is undefined. Not scheduling save."); // Debugging log
