@@ -1,8 +1,7 @@
 // This file provides helper functions for displaying SweetAlert2 modals and toasts.
 // It relies on the SweetAlert2 library (window.Swal), which is assumed to be
 // loaded via @require in the main script.
-// It also assumes 'config' (specifically config.isDarkMode) is available
-// from the main script's scope.
+// Note: Removed dependency on 'config' for dark mode as requested.
 
 /* --- SweetAlert2 Custom Alerts --- */
 // Function to show a standard SweetAlert2 modal
@@ -24,16 +23,8 @@ function SWAL_ALERT(title, html, icon = 'info') {
             htmlContainer: 'pfp-swal-html',
             confirmButton: 'mini primary' // Use mini.css/custom button style
         },
-        buttonsStyling: false, // Required to use custom button class
-        didOpen: (popup) => {
-            // Apply dark mode class to the Swal popup if the panel is in dark mode
-            // Assumes 'config' is available from the main script's scope
-            if (config.isDarkMode) {
-                popup.classList.add('dark-mode');
-            } else {
-                 popup.classList.remove('dark-mode');
-            }
-        }
+        buttonsStyling: false // Required to use custom button class
+        // Removed didOpen logic for dark mode
     });
 }
 
@@ -56,13 +47,7 @@ function SWAL_TOAST(title, icon = 'info') {
          didOpen: (toast) => {
              toast.addEventListener('mouseenter', window.Swal.stopTimer);
              toast.addEventListener('mouseleave', window.Swal.resumeTimer);
-             // Apply dark mode class to the Swal toast if the panel is in dark mode
-             // Assumes 'config' is available from the main script's scope
-             if (config.isDarkMode) {
-                 toast.classList.add('dark-mode');
-             } else {
-                  toast.classList.remove('dark-mode');
-             }
+             // Removed didOpen logic for dark mode
          }
     }).fire({
         icon: icon,
