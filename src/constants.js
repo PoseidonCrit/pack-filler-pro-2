@@ -9,7 +9,7 @@ const MAX_QTY = 99;                     // Max quantity per pack inpu
 const CONFIG_KEY = 'packFillerProConfig_vF83_41'; // Updated Storage key for F83.41
 const PANEL_ID = 'pack-filler-pro-panel';     // ID for the main panel
 const FULL_PAGE_CHECKBOX_ID = 'pfp-full-page-checkbox'; // ID for the full page load checkbox
-const DARK_MODE_CHECKBOX_ID = 'pfp-dark-mode-checkbox'; // ID for the dark mode checkbox
+// const DARK_MODE_CHECKBOX_ID = 'pfp-dark-mode-checkbox'; // Removed Dark Mode
 const MAX_TOTAL_INPUT_ID = 'pfp-max-total'; // ID for the max total amount input
 const TOGGLE_BUTTON_ID = 'pfp-toggle-button'; // ID for the separate toggle button
 const AUTO_FILL_LOADED_CHECKBOX_ID = 'pfp-autofill-loaded'; // ID for auto-fill loaded checkbox
@@ -31,21 +31,23 @@ const DEFAULT_CONFIG = {
     loadFullPage: true, // Setting this to TRUE as requested
     panelVisible: true,
     panelPos: { top: '120px', right: '30px', left: 'auto', bottom: 'auto' }, // Default panel position (top right)
-    isDarkMode: true,
+    // isDarkMode: false, // Removed Dark Mode
     maxTotalAmount: 0,
     autoFillLoaded: false,
     fillEmptyOnly: false, // Fill empty only option
-    scrollToBottomAfterLoad: FALSE // New option: Defaulting to FALSE
+    scrollToBottomAfterLoad: false // New option: Defaulting to FALSE
 };
 
 // Declare global variables that will be used and modified by other modules.
 // Declaring them here ensures they are part of the shared scope after @require.
 // These will be initialized or assigned values in the main script's init function
 // or other required modules.
-let config;
-let panelElement;
-let toggleButtonElement;
-let panelSimpleBarInstance = null;
+// Note: 'config' will now be managed explicitly in the main script and passed to functions.
+// Let config; // Removed global config declaration here
+
+let panelElement; // Will be populated after adding panel HTML
+let toggleButtonElement; // Will be populated after adding toggle button HTML
+let panelSimpleBarInstance = null; // Will be populated if SimpleBar is used and available
 
 // Note: No IIFE wrapper needed in this file if the main script uses one,
 // as the variables and constants defined here will be added to the main script's scope.
