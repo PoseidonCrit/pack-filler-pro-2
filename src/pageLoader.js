@@ -1,5 +1,5 @@
 // This file handles the logic for automatically scrolling the page to load all packs.
-// It uses the 'config' object (assumed available from the main script's scope)
+// It uses the 'config' object (now passed as a parameter)
 // and relies on browser window/document properties.
 // It assumes 'getPackInputs' from src/domUtils.js,
 // 'fillPacks' from src/fillLogic.js,
@@ -7,10 +7,14 @@
 // and '$' from cash-dom are available via @require.
 
 /* --- Full Page Load Functionality (Programmatic Scrolling) --- */
-async function loadFullPageIfNeeded() {
-    // Uses 'config' from the main script's scope (assumed available)
-    if (!config.loadFullPage) {
-         GM_log("Pack Filler Pro: Auto-load full page is disabled in config."); // Assumes GM_log is available
+/**
+ * Scrolls the page to load all packs if enabled in the config.
+ * @param {object} config - The script's configuration object.
+ */
+async function loadFullPageIfNeeded(config) { // Accept config as a parameter
+    // Uses 'config' passed as a parameter. Add a check for config validity.
+    if (!config || !config.loadFullPage) { // Check if config is valid and auto-load is enabled
+         GM_log("Pack Filler Pro: Auto-load full page is disabled in config or config is invalid."); // Assumes GM_log is available
          // Ensure max count for input is updated based on initially visible if not auto-loading
          // Uses $ from cash-dom and getPackInputs from src/domUtils.js
          $('#pfp-count').attr('max', getPackInputs().length);
@@ -60,7 +64,7 @@ async function loadFullPageIfNeeded() {
 
         // Optional: Call fillPacks with isAutoFill=true if auto-fill is enabled
         // Uses fillPacks from src/fillLogic.js
-        if (config.autoFillLoaded) {
+        if (config.autoFillLoaded) { // Access config from the parameter
              setTimeout(() => {
                  fillPacks(true);
              }, 50);
