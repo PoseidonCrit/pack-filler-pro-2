@@ -11,7 +11,7 @@
 const panelHTML = `
       <div id="${PANEL_ID}" class="pfp-panel">
         <div class="pfp-header" title="Drag to move panel">
-          <span class="pfp-title">Pack Filler Pro</span>
+          <span class="pfp-title">🎴 Pack Filler Pro</span>
           <span class="pfp-close" title="Close Panel">×</span>
         </div>
         <div class="pfp-body" data-simplebar>
