@@ -14,26 +14,28 @@ const MAX_TOTAL_INPUT_ID = 'pfp-max-total'; // ID for the max total amount input
 const TOGGLE_BUTTON_ID = 'pfp-toggle-button'; // ID for the separate toggle button
 const AUTO_FILL_LOADED_CHECKBOX_ID = 'pfp-autofill-loaded'; // ID for auto-fill loaded checkbox
 const FILL_EMPTY_ONLY_CHECKBOX_ID = 'pfp-empty-only'; // ID for fill empty only checkbox
+const SCROLL_TO_BOTTOM_CHECKBOX_ID = 'pfp-scroll-to-bottom'; // New ID for scroll to bottom checkbox
 
 
 /* --- Default Configuration --- */
 // Default settings for the script.
 // This object defines the initial state and structure of the configuration.
 const DEFAULT_CONFIG = {
-    version: 12,        // Config version control (increment if config structure changes)
+    version: 13,        // Incremented config version for new option
     lastMode: 'fixed',
     lastCount: 10,
     lastFixedQty: 1,
     lastMinQty: 1,
     lastMaxQty: 5,
     lastClear: false,
-    loadFullPage: true, // Defaulting this to TRUE
+    loadFullPage: true, // Setting this to TRUE as requested
     panelVisible: true,
     panelPos: { top: '120px', right: '30px', left: 'auto', bottom: 'auto' }, // Default panel position (top right)
     isDarkMode: false,
     maxTotalAmount: 0,
     autoFillLoaded: false,
-    fillEmptyOnly: false // Fill empty only option
+    fillEmptyOnly: false, // Fill empty only option
+    scrollToBottomAfterLoad: false // New option: Defaulting to FALSE
 };
 
 // Declare global variables that will be used and modified by other modules.
