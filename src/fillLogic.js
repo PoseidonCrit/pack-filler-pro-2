@@ -2,7 +2,7 @@
 // It uses constants and DOM helper functions.
 // Note: This module now accepts the 'config' object as a parameter where needed.
 
-// Assumes 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
+// It assumes 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
 // 'clearAllInputs', 'SWAL_ALERT', 'SWAL_TOAST', and 'updateConfigFromUI'
 // (or a mechanism to get current UI state) are accessible.
 
