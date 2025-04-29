@@ -9,20 +9,19 @@ const MAX_QTY = 99;                     // Max quantity per pack inpu
 const CONFIG_KEY = 'packFillerProConfig_vF83_41'; // Updated Storage key for F83.41
 const PANEL_ID = 'pack-filler-pro-panel';     // ID for the main panel
 const FULL_PAGE_CHECKBOX_ID = 'pfp-full-page-checkbox'; // ID for the full page load checkbox
-const DARK_MODE_CHECKBOX_ID = 'pfp-dark-mode-checkbox'; // ID for Dark Mode checkbox
+const DARK_MODE_CHECKBOX_ID = 'pfp-dark-mode-checkbox'; // ID for Dark Mode checkbox (Re-added based on UI HTML)
 const MAX_TOTAL_INPUT_ID = 'pfp-max-total'; // ID for the max total amount input
 const TOGGLE_BUTTON_ID = 'pfp-toggle-button'; // ID for the separate toggle button
 const AUTO_FILL_LOADED_CHECKBOX_ID = 'pfp-autofill-loaded'; // ID for auto-fill loaded checkbox
 const FILL_EMPTY_ONLY_CHECKBOX_ID = 'pfp-empty-only'; // ID for fill empty only checkbox
 const SCROLL_TO_BOTTOM_CHECKBOX_ID = 'pfp-scroll-to-bottom'; // New ID for scroll to bottom checkbox
-const NOISE_SEED_INPUT_ID = 'pfp-noise-seed'; // New ID for the noise seed input
 
 
 /* --- Default Configuration --- */
 // Default settings for the script.
 // This object defines the initial state and structure of the configuration.
 const DEFAULT_CONFIG = {
-    version: 15,        // Incremented config version for new seed option
+    version: 14,        // Incremented config version for potential future changes
     lastMode: 'fixed',
     lastCount: 10,
     lastFixedQty: 1,
@@ -32,12 +31,11 @@ const DEFAULT_CONFIG = {
     loadFullPage: true, // Setting this to TRUE as requested
     panelVisible: true,
     panelPos: { top: '120px', right: '30px', left: 'auto', bottom: 'auto' }, // Default panel position (top right)
-    isDarkMode: false,
+    isDarkMode: false, // Re-added Dark Mode default
     maxTotalAmount: 0,
     autoFillLoaded: false,
     fillEmptyOnly: false, // Fill empty only option
-    scrollToBottomAfterLoad: false, // New option
-    noiseSeed: '' // New option: Defaulting to an empty string (no seed)
+    scrollToBottomAfterLoad: false // New option: Defaulting to FALSE
 };
 
 // Declare variables that will be populated during initialization in the main script.
