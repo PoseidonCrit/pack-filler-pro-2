@@ -33,13 +33,13 @@ const panelHTML = `
           <div class="pfp-form-group" id="pfp-fixed-group">
             <label for="pfp-fixed" class="pfp-label">Copies per Pack:</label>
             <input type="number" id="pfp-fixed" min="0" max="${MAX_QTY}" list="pfp-fixed-list" class="pfp-input" placeholder="e.g., 1 or 3" />
-          </div>
+                      </div>
 
           <div id="pfp-range-inputs">
              <div class="pfp-form-group pfp-range-group">
                <label for="pfp-min" class="pfp-label">Min Copies (Random):</label>
                <input type="number" id="pfp-min" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 1" />
-             </div>
+                            </div>
              <div class="pfp-form-group pfp-range-group">
                <label for="pfp-max" class="pfp-label">Max Copies (Random):</label>
                <input type="number" id="pfp-max" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 5" />
