@@ -1,230 +1,164 @@
 // ==UserScript==
-// @name         🎴F105.32 Pack Filler Pro – Sleek Edition
-// @namespace    https://ygoprodeck.com
-// @version      🎴F105.32
-// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
-// @match        https://ygoprodeck.com/pack-sim/*
-// @grant        GM_addStyle
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_registerMenuCommand
-// @grant        GM_log
-// @require      https://cdn.jsdelivr.net/npm/cash-dom@8.1.0/dist/cash.min.js
-// @require      https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js
-// @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js
-// // @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js // Uncomment if needed if using simplebar
+// @name          🎴F105.32 Pack Filler Pro – Sleek Edition (Revised)
+// @namespace     https://ygoprodeck.com
+// @version       🎴F105.32-rev1
+// @description   Enhanced UI/options for YGOPRODeck Pack Sim, loads all packs, advanced fill patterns, security/reliability fixes.
+// @match         https://ygoprodeck.com/pack-sim/*
+// @grant         GM_addStyle
+// @grant         GM_setValue
+// @grant         GM_getValue
+// @grant         GM_registerMenuCommand
+// @grant         GM_log
+// @require       https://cdn.jsdelivr.net/npm/cash-dom@8.1.0/dist/cash.min.js
+// @require       https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
+// @require       https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js // Redundant? Keep one Swal require.
+// // @require    https://cdn.jsdelivr.net/npm/simplebar@latest/dist/simplebar.min.js // Uncomment if simplebar needed
 
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/configManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/domUtils.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/swalHelpers.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/fillLogic.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/pageLoader.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiCss.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/uiManager.js
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js
-
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/constants.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/configManager.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/domUtils.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/swalHelpers.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/patternWorker.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/fillLogic.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/pageLoader.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/uiCss.js
+// @require       https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/uiManager.js
+// // @require    https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/REPLACE_WITH_CORRECT_COMMIT_HASH/src/dragHandler.js // Uncomment if adding drag
 
 // ==/UserScript==
 
-// This is the main entry point file for the UserScript.
-// It contains the header, the main IIFE wrapper, the init function,
-// and the event listener to start the script.
-// All other functionalities are loaded via @require directives from the src/ folder.
+// Note: Replace REPL...HASH above with the actual commit hash or branch name where these files reside.
 
 (function() {
     'use strict';
 
-    // Declare variables that will be populated during initialization.
-    // 'config' is declared here and will hold the loaded configuration object.
-    // panelElement, toggleButtonElement, panelSimpleBarInstance are also declared here.
-    // These are declared in constants.js now and will be available here.
+    // Global variables populated during initialization are now declared in constants.js
+    // (config, panelElement, toggleButtonElement, panelSimpleBarInstance, patternWorker)
 
-    // Declare the Web Worker instance
-    let patternWorker;
-
-    /* --- Initialize Script --- */
-    // This function orchestrates the startup of the script.
+    /**
+     * Initialize the script.
+     */
     function init() {
         GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`);
 
-        // 1. Essential Dependency Checks (Libraries)
-        // Check if critical external libraries loaded correctly via @require.
-        // These checks are important because the script relies heavily on them.
-        if (typeof window.cash === 'undefined') {
-            const errorMessage = "Cash-dom library not found. Please check @require directives. Script cannot run.";
-            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-            alert(`Pack Filler Pro Error: ${errorMessage}`);
+        // 1. Essential Dependency Checks
+        if (typeof $ === 'undefined' || typeof window.cash === 'undefined') { // Check cash-dom ($)
+            alert("Pack Filler Pro Error: Cash-dom library not found. Script cannot run.");
             return;
         }
-         if (typeof window.Swal === 'undefined') {
-            const errorMessage = "SweetAlert2 library not found. Please check @require directives. Script cannot run.";
-            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-            alert(`Pack Filler Pro Error: ${errorMessage}`);
+        if (typeof Swal === 'undefined') { // Check SweetAlert2 (Swal)
+            alert("Pack Filler Pro Error: SweetAlert2 library not found. Script cannot run.");
             return;
         }
-        GM_log("Pack Filler Pro: Essential libraries (cash-dom, SweetAlert2) found.");
+        GM_log("Pack Filler Pro: Essential libraries found.");
 
-        // 2. Initialize Web Worker
-        // Check if the Worker class is available and if the worker code string is available.
-        // 'workerCode' is the variable name exported from patternWorker.js due to @require.
+        // 2. Load Configuration
+        config = loadConfig(); // Load config using function from configManager.js
+        GM_log("Pack Filler Pro: Config loaded:", config);
+
+        // 3. Initialize Web Worker (Persistent)
         if (typeof Worker !== 'undefined' && typeof workerCode !== 'undefined') {
             try {
-                 const blob = new Blob([workerCode], { type: 'application/javascript' });
-                 const blobUrl = URL.createObjectURL(blob);
-                 patternWorker = new Worker(blobUrl);
-                 GM_log("Pack Filler Pro: Web Worker initialized successfully.");
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                patternWorker = new Worker(blobUrl); // Assign to the global variable
+                GM_log("Pack Filler Pro: Persistent Web Worker created.");
 
-                 // Listen for messages from the worker
-                 patternWorker.onmessage = (e) => {
-                      if (e.data && e.data.type === 'log') {
-                           // Handle log messages from the worker
-                           GM_log("Pack Filler Pro Worker Log:", ...e.data.data);
-                      }
-                      // Other message types (like 'result') are handled in fillLogic.js
-                 };
-
-                 patternWorker.onerror = (error) => {
-                      GM_log("Pack Filler Pro: Web Worker failed to initialize or encountered an error.", error);
-                      // Handle worker errors, potentially disable pattern features or show a warning
-                      // SWAL_TOAST('Pattern Worker Error: Pattern features may be disabled.', 'error', config); // Use config if available
-                      // Cannot use Swal here as config might not be fully loaded or Swal itself might have issues
-                      GM_log('Pack Filler Pro: Pattern Worker Error - Pattern features may be disabled.');
-                 };
+                // Setup the main message/error handlers for the worker instance
+                setupWorkerMessageHandler(); // Use helper from fillLogic.js
 
             } catch (e) {
-                 GM_log("Pack Filler Pro: Failed to initialize Web Worker.", e);
-                 patternWorker = null; // Ensure worker is null if initialization fails
-                 // SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config); // Use config if available
-                 GM_log('Pack Filler Pro: Pattern Worker Init Failed - Pattern features may be disabled.');
+                GM_log("Pack Filler Pro: Failed to initialize Web Worker.", e);
+                patternWorker = null; // Ensure worker is null if init fails
+                SWAL_ALERT("Worker Init Failed", `Could not create pattern worker: ${e.message}. Pattern features may be disabled.`, 'error', config);
             }
         } else {
-            GM_log("Pack Filler Pro: Web Worker API or workerCode not available. Pattern features will run on main thread.");
-            patternWorker = null; // Ensure worker is null if not supported/loaded
+            GM_log("Pack Filler Pro: Web Worker API or workerCode not available. Pattern features requiring worker are disabled.");
+            patternWorker = null;
         }
-
-
-        // 3. Load Configuration
-        GM_log("Pack Filler Pro: Attempting to load config."); // Debugging log
-        // Calls the loadConfig function from src/configManager.js
-        // Assign the returned config object to the 'config' variable in this scope.
-        config = loadConfig();
-        GM_log("Pack Filler Pro: loadConfig returned and assigned to 'config':", config); // Debugging log
-
-
-        // Add a check to ensure config is valid after loading
-        if (!config || typeof config.loadFullPage === 'undefined') {
-             const errorMessage = "Failed to load configuration or config structure is invalid. Script cannot run correctly.";
-             GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-             alert(`Pack Filler Pro Error: ${errorMessage}`);
-             return; // Stop initialization if config is bad
-        }
-
-        GM_log(`Pack Filler Pro: Config loaded. Auto-load full page: ${config.loadFullPage}, Panel Visible: ${config.panelVisible}, Auto-fill loaded: ${config.autoFillLoaded}, Fill Empty Only: ${config.fillEmptyOnly}, Scroll to Bottom: ${config.scrollToBottomAfterLoad}, Dark Mode: ${config.isDarkMode}, Pattern Type: ${config.patternType}, Pattern Scale: ${config.patternScale}, Pattern Intensity: ${config.patternIntensity}`);
 
         // 4. Add CSS
-        // Calls the addPanelCSS function from src/uiCss.js
-        addPanelCSS();
+        addPanelCSS(); // From uiCss.js
 
         // 5. Add Panel HTML to DOM and get element references
-        // Uses panelHTML and panelToggleHTML from src/uiCss.js
-        document.body.insertAdjacentHTML('beforeend', panelHTML);
-        document.body.insertAdjacentHTML('beforeend', panelToggleHTML);
+        document.body.insertAdjacentHTML('beforeend', panelHTML); // From uiCss.js
+        document.body.insertAdjacentHTML('beforeend', panelToggleHTML); // From uiCss.js
 
-        // Get references to the main panel and toggle button elements
-        // Uses PANEL_ID and TOGGLE_BUTTON_ID from src/constants.js
-        panelElement = document.getElementById(PANEL_ID);
-        toggleButtonElement = document.getElementById(TOGGLE_BUTTON_ID);
+        panelElement = document.getElementById(PANEL_ID); // From constants.js
+        toggleButtonElement = document.getElementById(TOGGLE_BUTTON_ID); // From constants.js
 
-        // Check if UI elements were successfully added and log their presence
-        if (!panelElement) {
-            const errorMessage = `Main panel element (#${PANEL_ID}) not found after insertion. Script cannot run.`;
-            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-            alert(`Pack Filler Pro Error: ${errorMessage}`);
-            return;
-        } else {
-             GM_log(`Pack Filler Pro: Panel element (#${PANEL_ID}) found in DOM.`);
-        }
-
-         if (!toggleButtonElement) {
-            const errorMessage = `Toggle button element (#${TOGGLE_BUTTON_ID}) not found after insertion. Script cannot run.`;
-            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-            alert(`Pack Filler Pro Error: ${errorMessage}`);
-            return;
-        } else {
-            GM_log(`Pack Filler Pro: Toggle button element (#${TOGGLE_BUTTON_ID}) found in DOM.`);
+        if (!panelElement || !toggleButtonElement) {
+             const missing = !panelElement ? `#${PANEL_ID}` : `#${TOGGLE_BUTTON_ID}`;
+             alert(`Pack Filler Pro Error: UI element (${missing}) not found after insertion. Script cannot run.`);
+             return;
         }
         GM_log("Pack Filler Pro: UI elements added to DOM.");
 
-
-        // 6. Initialize SimpleBar (Custom Scrollbar - Optional)
-        // Check if SimpleBar library is available before initializing.
+        // 6. Initialize SimpleBar (Optional Custom Scrollbar)
         const panelBodyEl = panelElement.querySelector('.pfp-body');
-        if (panelBodyEl && typeof window.SimpleBar !== 'undefined') {
-            panelSimpleBarInstance = new window.SimpleBar(panelBodyEl);
-            GM_log("Pack Filler Pro: SimpleBar initialized.");
+        // Check if SimpleBar is loaded (uncomment @require if needed)
+        if (panelBodyEl && typeof SimpleBar !== 'undefined') {
+             try {
+                  panelSimpleBarInstance = new SimpleBar(panelBodyEl);
+                  GM_log("Pack Filler Pro: SimpleBar initialized.");
+             } catch (e) {
+                  GM_log("Pack Filler Pro: SimpleBar initialization failed.", e);
+                  panelSimpleBarInstance = null;
+             }
         } else {
-            GM_log("Pack Filler Pro: SimpleBar library not available or panel body not found. Using native scrollbar.");
-            panelSimpleBarInstance = null;
+             GM_log("Pack Filler Pro: SimpleBar library not available or panel body not found. Using native scrollbar.");
+             panelSimpleBarInstance = null;
         }
 
-
-        // 7. Apply Initial Configuration to UI and State
-        // Calls functions from src/uiManager.js, passing the config object
-        loadConfigIntoUI(config); // Pass config here
-        updatePanelModeDisplay(config.lastMode); // Pass mode from config
-        // Pass the initial position from config when setting initial visibility
-        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config here
-        applyDarkMode(config, config.isDarkMode); // Apply dark mode based on loaded config
-
+        // 7. Load Config into UI & Apply Initial State
+        loadConfigIntoUI(config); // From uiManager.js (includes applying mode display, theme, visibility, position)
 
         // 8. Bind Events
-        // Calls the bindPanelEvents function from src/uiManager.js, passing the config object
-        bindPanelEvents(config); // Pass config here
-
+        bindPanelEvents(config); // From uiManager.js
 
         // 9. Trigger Auto-load Full Page if enabled
-        // Calls the loadFullPageIfNeeded function from src/pageLoader.js
-        // Pass the config object explicitly to ensure it's available.
         if (config.loadFullPage) {
-            GM_log("Pack Filler Pro: Auto-load is enabled, scheduling loadFullPageIfNeeded."); // Debugging log
-            // Delay slightly to allow page rendering
-            // Ensure config is passed correctly in the setTimeout callback
-            setTimeout(() => loadFullPageIfNeeded(config), 300); // Pass config here
+            GM_log("Pack Filler Pro: Auto-load enabled, scheduling loadFullPageIfNeeded.");
+            // Delay slightly to allow page rendering and observers to attach
+            setTimeout(() => loadFullPageIfNeeded(config), 500); // Pass config to pageLoader.js function
         } else {
-            GM_log("Pack Filler Pro: Auto-load is disabled."); // Debugging log
-            // If not auto-loading, ensure the max count for the count input is set based on initially visible inputs
-            // Uses $ from cash-dom and getPackInputs from src/domUtils.js
+            GM_log("Pack Filler Pro: Auto-load is disabled.");
+            // Ensure max count is set initially if not auto-loading
             $('#pfp-count').attr('max', getPackInputs().length);
         }
 
+        // 10. Optional: Initialize Drag Handler (Uncomment @require if needed)
+        /*
+        if (typeof initDrag === 'function') {
+             initDrag(panelElement); // From dragHandler.js
+        }
+        */
 
-        GM_log("Pack Filler Pro: Initialization complete."); // Debugging log
+        GM_log("Pack Filler Pro: Initialization complete.");
     }
 
 
     // --- Run Initialization ---
-    // Use DOMContentLoaded to ensure the basic page structure is ready before initializing.
-    // This is the actual trigger that starts the script's logic after the page loads.
-    document.addEventListener('DOMContentLoaded', init);
+    // Use DOMContentLoaded to ensure the basic page structure is ready.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        // DOMContentLoaded has already fired
+        init();
+    }
 
-    // Clean up the worker when the script is unloaded (e.g., page navigation)
+    // --- Cleanup ---
+    // Terminate worker and disconnect observers on page unload
     window.addEventListener('beforeunload', () => {
         if (patternWorker) {
             patternWorker.terminate();
             GM_log("Pack Filler Pro: Web Worker terminated.");
+            patternWorker = null;
         }
-         // Disconnect MutationObservers if they are stored globally
-         if (window._pfpSwalObserver) {
-              window._pfpSwalObserver.disconnect();
-              delete window._pfpSwalObserver;
-              GM_log("Pack Filler Pro: SweetAlert2 popup observer disconnected.");
-         }
-         // Add disconnection for the main input observer if stored globally
-         // (Currently, the main input observer is local to bindPanelEvents, might need adjustment)
+        // Disconnect MutationObservers if stored globally (currently local/scoped)
+        // Example: if (window._pfpListObserver) window._pfpListObserver.disconnect();
+        // Example: if (window._pfpSwalObserver) window._pfpSwalObserver.disconnect();
+        GM_log("Pack Filler Pro: Page unloading.");
     });
 
-
 })(); // End of IIFE
-
