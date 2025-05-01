@@ -3,7 +3,7 @@
 // and relies on browser window/document properties.
 
 // It assumes the following are available in the main script's scope via @require:
-// - functions from domUtils.js (getPackInputs, $)
+// - functions from domUtils.js (getPackInputs, $, clamp)
 // - functions from fillLogic.js (fillPacks)
 // - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT)
 // - constants from constants.js (SELECTOR, SCROLL_TO_BOTTOM_CHECKBOX_ID etc.)
@@ -36,7 +36,11 @@ async function loadFullPageIfNeeded(config) {
          // Ensure max count for input is updated based on initially visible if not auto-loading
          // Assumes getPackInputs and $ are available
          if (typeof getPackInputs === 'function' && typeof $ === 'function') {
-              $('#pfp-count').attr('max', getPackInputs().length); // Assumes $ is cash-dom
+              // Use clamp from domUtils.js or define locally if needed
+              const clampFn = typeof clamp === 'function' ? clamp : (val, min, max) => Math.min(max, Math.max(min, val));
+              const maxCount = getPackInputs().length;
+              // Ensure the max attribute is set but not less than 0
+              $('#pfp-count').attr('max', clampFn(maxCount, 0, Infinity)); // Assumes $ is cash-dom
               GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
          } else {
               GM_log("Pack Filler Pro: getPackInputs or $ function not found. Could not set max count.");
@@ -134,6 +138,13 @@ async function loadFullPageIfNeeded(config) {
     // Trigger auto-fill if enabled AFTER loading is complete and if fillPacks is available
     const finalInputCount = getPackInputs().length;
     GM_log(`Pack Filler Pro: Full page auto-load process finished. Final visible input count after load: ${finalInputCount}.`);
+
+    // Update the max attribute for the count input based on the total loaded inputs
+     // Use clamp from domUtils.js or define locally if needed
+     const clampFn = typeof clamp === 'function' ? clamp : (val, min, max) => Math.min(max, Math.max(min, val));
+     $('#pfp-count').attr('max', clampFn(finalInputCount, 0, Infinity)); // Assumes $ is cash-dom
+     GM_log(`Pack Filler Pro: Max count for input updated to ${finalInputCount} after auto-load.`);
+
 
     // Only trigger auto-fill if enabled, if fillPacks function exists, and if any inputs were found (either initially or after loading)
     if (config.autoFillLoaded && typeof fillPacks === 'function' && finalInputCount > 0) {
