@@ -1,122 +1,24 @@
 // This file contains the main logic for calculating and applying quantities to inputs.
 // It orchestrates the fill process, including selecting packs, determining quantities
-// using main thread strategies or a Web Worker, and applying updates to the DOM.
+// using main thread strategies, and applying updates to the DOM.
+
+// THIS VERSION PERFORMS ALL PATTERN CALCULATIONS ON THE MAIN THREAD.
 
 // It assumes the following are available in the main script's scope via @require:
 // - constants from constants.js (MAX_QTY, SELECTOR, etc.)
 // - functions from domUtils.js (getPackInputs, clamp, updateInput, clearAllInputs, sanitize)
 // - functions from swalHelpers.js (SWAL_ALERT, SWAL_TOAST)
 // - functions from configManager.js (validateFillConfig)
-// - patternWorker instance (the Worker object)
 // - GM_log function
 
-/* --- Worker Interaction (Local to fillLogic.js) --- */
-// Manages requests sent to the Web Worker and their responses using Promises.
-// This logic is kept local to fillLogic.js because it manages the _pendingWorkerRequests map.
-
-let _workerRequestId = 0;
-const _pendingWorkerRequests = new Map(); // Map<requestId, { resolve, reject, timeoutId }>
-
-/**
- * Sends a calculation request message to the Web Worker and returns a Promise.
- * Handles timeouts and processes results or errors received from the worker.
- * Assumes patternWorker instance is available and GM_log is available.
- * @param {object} data - The data to send to the worker (should include strategy, count, config).
- * @param {number} timeoutMs - Timeout duration in milliseconds.
- * @returns {Promise<{quantities: number[], metadata: object}>} A promise that resolves with the worker's result data.
- */
-async function callWorkerAsync(data, timeoutMs = 10000) {
-     // Check if patternWorker instance exists and is not terminated
-     if (typeof patternWorker === 'undefined' || patternWorker === null) {
-          GM_log("Pack Filler Pro: callWorkerAsync called but worker instance is not available.");
-          // Immediately reject if the worker instance is not ready
-          throw new Error("Web Worker instance is not available.");
-     }
-
-     // Return a new Promise that will be resolved or rejected when the worker responds or times out
-     return new Promise((resolve, reject) => {
-          const requestId = _workerRequestId++; // Generate a unique request ID
-
-          // Set up a timeout for the worker request
-          const timeoutId = setTimeout(() => {
-               GM_log(`Pack Filler Pro: Worker request ${requestId} timed out after ${timeoutMs}ms.`);
-               // Clean up the pending request map entry
-               _pendingWorkerRequests.delete(requestId);
-               // Reject the promise on timeout
-               reject(new Error(`Web Worker calculation timed out (Request ID: ${requestId}).`));
-          }, timeoutMs);
-
-          // Store the resolve/reject functions and timeout ID for this request
-          _pendingWorkerRequests.set(requestId, { resolve, reject, timeoutId });
-
-          // Send the message to the worker.
-          // The worker expects data.type to be 'calculate' and includes the requestId.
-          try {
-              patternWorker.postMessage({ ...data, requestId: requestId, type: 'calculate' });
-              // GM_log(`Pack Filler Pro: Sent message to worker (ID: ${requestId}):`, { ...data, requestId: requestId, type: 'calculate' }); // Too chatty
-          } catch (e) {
-              // Handle errors that occur when posting the message (e.g., worker is terminated)
-              GM_log(`Pack Filler Pro: Error posting message to worker (ID: ${requestId}).`, e);
-              clearTimeout(timeoutId); // Clear the timeout
-              _pendingWorkerRequests.delete(requestId); // Clean up the pending request
-              reject(new Error(`Failed to send message to Web Worker: ${e.message}`)); // Reject the promise
-          }
-     });
-}
-
-// Listener for messages coming back from the worker.
-// This function processes the received messages and resolves/rejects the corresponding Promises
-// stored in the _pendingWorkerRequests map.
-// This function should be set as the onmessage handler for the worker instance in the main script.
-/**
- * Processes messages received from the Web Worker.
- * Looks up the pending request by ID and resolves or rejects its promise.
- * @param {MessageEvent} e - The message event from the worker. Expected data includes type, requestId, and either quantities/metadata or error.
- */
-function handleWorkerMessage(e) {
-    // Destructure the data from the worker message
-    const { type, data, requestId, quantities, metadata, error } = e.data;
-
-    // Handle log messages from the worker separately
-    if (type === 'log') {
-        GM_log("Pack Filler Pro Worker Log:", ...data); // Log worker messages to the main console
-        return; // Processed log message, exit handler
-    }
-
-    // For 'result' or 'error' messages, look up the pending request by ID
-    if (_pendingWorkerRequests.has(requestId)) {
-        const { resolve, reject, timeoutId } = _pendingWorkerRequests.get(requestId);
-
-        // Clear the timeout since we received a response
-        clearTimeout(timeoutId);
-        // Remove the request from the pending map
-        _pendingWorkerRequests.delete(requestId);
-
-        if (type === 'result') {
-            // If the message type is 'result', resolve the promise with the quantities and metadata
-            resolve({ quantities: quantities || [], metadata: metadata || {} }); // Ensure quantities/metadata are not null/undefined
-        } else if (type === 'error') {
-            // If the message type is 'error', reject the promise with the error details
-            reject(new Error(`Web Worker error (ID: ${requestId}): ${error && error.message ? error.message : 'Unknown error'}`));
-        } else {
-            // Handle unexpected message types for a known request ID
-            GM_log(`Pack Filler Pro: Received unexpected message type from worker for request ID ${requestId}: ${type}`, e.data);
-            reject(new Error(`Received unexpected message type from worker: ${type}`));
-        }
-    } else {
-        // If the request ID is not found in the pending map, it might be a stale response
-        GM_log(`Pack Filler Pro: Received worker message for unknown or stale request ID: ${requestId} (Type: ${type})`);
-    }
-}
-
-// Note: The patternWorker.onmessage handler in the main script's init function
-// should be set to call this handleWorkerMessage function.
+/* --- Worker Interaction - REMOVED IN THIS VERSION --- */
+// The Web Worker and related functions (callWorkerAsync, handleWorkerMessage) are
+// removed as all calculations are now done on the main thread.
 
 
 /* --- Main Thread Fill Strategies & Helpers --- */
 // Simple strategies that can run efficiently on the main thread.
-// These are used for modes that don't require complex calculations (fixed, random, alternating)
-// or as fallbacks if the Web Worker is unavailable or fails.
+// These are used for all modes in this main-thread-only version.
 
 // Helper to clamp a value within min/max bounds (local to main thread logic)
 // Assumes clamp from domUtils.js is available globally.
@@ -144,7 +46,74 @@ function chooseQuantity(config) {
 // Simple linear interpolation helper (local to main thread logic)
 const lerp = (a, b, t) => a + t * (b - a);
 
-// Object containing different fill strategies that can run on the main thread.
+
+// Basic 1D Perlin Noise implementation (simplified, local to main thread)
+// Based on Ken Perlin's original Java implementation.
+// Note: This is a 1D noise function suitable for a linear list of packs.
+// Seed is used to make the noise repeatable.
+// This is a direct copy from the original worker code's noise implementation.
+function perlinNoise(x, seed) {
+    // Simple hashing function using bitwise operations and a seed.
+    // Needs to be deterministic based on input (x) and seed.
+    // Using prime multipliers and XOR with seed for mixing.
+    const hash = (n, s) => {
+        let i = ((n * 0x1357) ^ s) >>> 0; // Multiply, XOR with seed, ensure positive 32-bit int
+        i = ((i * 0x4593) ^ (i >>> 16)) >>> 0; // More mixing
+        i = ((i * 0x8295) ^ (i >>> 16)) >>> 0; // Final mixing
+        return i;
+    };
+
+    const fade = t => t * t * t * (t * (t * 6 - 15) + 10); // Smooth interpolation curve (6t^5 - 15t^4 - 10t^3)
+    // lerp is defined above
+
+    // Gradient function for 1D noise
+    // Determines the influence of the random gradient at an integer coordinate.
+    const grad = (hashValue, xDistance) => {
+        // Get the last bit of the hash to determine gradient direction (-1 or 1)
+        const h = hashValue & 1; // Use just one bit for 1D gradient direction
+        const gradient = (h === 0) ? xDistance : -xDistance; // If bit is 0, gradient is positive; otherwise negative
+        return gradient;
+    };
+
+    const x0 = Math.floor(x); // Integer part
+    const x1 = x0 + 1; // Next integer part
+    const t = x - x0; // Fractional part (0 to 1)
+    const t_faded = fade(t); // Smooth the fractional part
+
+    // Calculate gradients at the integer coordinates based on their hash and the seed
+    const hash0 = hash(x0, seed);
+    const hash1 = hash(x1, seed);
+
+    const grad0 = grad(hash0, t); // Gradient at x0, influenced by distance t
+    const grad1 = grad(hash1, t - 1); // Gradient at x1, influenced by distance t-1
+
+    // Interpolate between the gradients
+    return lerp(grad0, grad1, t_faded); // Result is typically between -1 and 1
+}
+
+// Generates a random seed if none is provided or if seed is an empty string (local to main thread)
+// Direct copy from original worker code.
+function generateSeed(seedInput) {
+    // If seedInput is provided and is a non-empty string, try to parse it as an integer.
+    // Otherwise, generate a random seed.
+    if (seedInput && typeof seedInput === 'string' && seedInput.trim() !== '') {
+        const parsedSeed = parseInt(seedInput, 10);
+        // Use the parsed seed if it's a valid number, otherwise generate random
+        if (!isNaN(parsedSeed)) {
+             GM_log(`Pack Filler Pro: Using provided seed: ${parsedSeed}`);
+             return parsedSeed;
+        } else {
+             GM_log(`Pack Filler Pro: Invalid seed input '${seedInput}'. Generating random seed.`);
+        }
+    }
+    // Generate a random seed (a large integer)
+    const randomSeed = Math.floor(Math.random() * 2**32); // Use a large range for the seed
+    GM_log(`Pack Filler Pro: Generating random seed: ${randomSeed}`);
+    return randomSeed;
+}
+
+
+// Object containing different fill strategies that run on the main thread.
 // These functions take config, current index, and total count as arguments.
 const MainThreadFillStrategies = {
     // Fixed quantity strategy: Always returns the configured fixed quantity.
@@ -159,29 +128,29 @@ const MainThreadFillStrategies = {
     random: (config, index, total) => chooseQuantity(config),
 
     // Gradient strategy: Calculates quantity based on position in the list (linear gradient).
-    // Can also run in the worker for performance. This is the main thread fallback/implementation.
     // Assumes MAX_QTY from constants.js, clamp, and lerp are available.
     gradient: (config, index, total) => {
         const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99;
-        const intensity = config.patternIntensity || 1.0; // Default intensity (0.0 to 1.0)
-        const scale = config.patternScale || 100; // Default scale (affects gradient steepness over the count)
+        const intensity = typeof config.patternIntensity === 'number' ? config.patternIntensity : 1.0; // Default intensity (0.0 to 1.0)
+        const scale = typeof config.patternScale === 'number' ? config.patternScale : 100; // Default scale (affects gradient steepness over the count)
         const minQty = config.lastMinQty;
-        const maxQty = config.lastMaxQty;
-        const range = maxQty - minQty; // The range of possible quantities
+        const maxQtyCfg = config.lastMaxQty; // Use different name to avoid conflict with MAX_QTY constant
+        const range = maxQtyCfg - minQty; // The range of possible quantities
 
         // Ensure total count is at least 1 to avoid division by zero in position mapping
-        const safeCount = Math.max(1, total);
+        const safeTotal = Math.max(1, total);
         // Ensure scale is at least 1 for mapping index to position factor
         const safeScale = Math.max(1, scale);
-
 
         // Calculate position factor (0 to 1) based on index and effective scale.
         // Dividing by (safeScale - 1) determines how quickly the gradient progresses over the list.
         // Clamp to 1 to ensure the factor doesn't exceed 1 even if index > scale.
-        const positionFactor = clamp(i / (safeScale > 1 ? safeScale - 1 : 1), 0, 1); // Handle scale=1 case
+        // Note: When scale = 1, gradient is effectively linear over the total count.
+        // We map index 0 to factor 0, index total-1 to factor 1 (if total > 1).
+        const positionFactor = safeTotal > 1 ? clamp(index / (safeTotal - 1), 0, 1) : 0;
 
 
-        // Calculate a base quantity based on position in the list (linear gradient from minQty to maxQty)
+        // Calculate a quantity based on position in the list (linear gradient from minQty to maxQtyCfg)
         const baseQty = minQty + positionFactor * range;
 
         // Apply intensity to shift the quantity towards minQty or the linear gradient value.
@@ -196,6 +165,55 @@ const MainThreadFillStrategies = {
         return finalQuantity;
     },
 
+     // Perlin strategy: Calculates quantities based on the Perlin Noise pattern.
+     // Assumes MAX_QTY from constants.js, clamp, lerp, perlinNoise, generateSeed are available.
+    perlin: (config, index, total) => {
+        const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99;
+        const minQty = config.lastMinQty;
+        const maxQtyCfg = config.lastMaxQty; // Use different name to avoid conflict with MAX_QTY constant
+        const scale = typeof config.patternScale === 'number' ? config.patternScale : 100; // Default scale
+        const intensity = typeof config.patternIntensity === 'number' ? config.patternIntensity : 1.0; // Default intensity (0.0 to 1.0)
+        const range = maxQtyCfg - minQty; // The range of possible quantities
+
+        // Generate or parse seed
+        const actualSeed = generateSeed(config.noiseSeed); // Uses generateSeed from above
+
+        // Ensure scale is at least 1 to avoid issues
+        const safeScale = Math.max(1, scale);
+
+        // Map index (0 to total-1) to a position in the noise space, influenced by scale.
+        // Dividing by safeScale determines how 'zoomed in' the noise is.
+        const noiseInput = index / safeScale;
+
+        // Get noise value (typically -1 to 1)
+        const noiseValue = perlinNoise(noiseInput, actualSeed); // Uses perlinNoise from above
+
+        // Map noise value (-1 to 1) to a quantity range (minQty to maxQtyCfg)
+        // Normalize noise from [-1, 1] to [0, 1]
+        const normalizedNoise = (noiseValue + 1) / 2; // Now 0 to 1
+
+        // Interpolate between minQty and maxQtyCfg based on normalized noise and intensity.
+        // Intensity controls how much the noise affects the final quantity.
+        // If intensity is 1, quantity ranges fully from minQty to maxQtyCfg based on noise.
+        // If intensity is 0, quantity is always the midpoint (minQty + range/2).
+        // We interpolate between the midpoint and the quantity determined purely by noise.
+        const midpoint = minQty + range / 2;
+        const quantityFromNoise = minQty + normalizedNoise * range;
+        let finalQuantityFloat = lerp(midpoint, quantityFromNoise, intensity);
+
+        // Clamp the final quantity to the allowed range [0, MAX_QTY] and round to nearest integer.
+        const finalQuantity = clamp(Math.round(finalQuantityFloat), 0, maxQty);
+
+        // Store seed used for feedback (can't return metadata directly from strategy function)
+        // We'll log it here and update feedback generation logic to reflect main thread calculation.
+        // Alternatively, calculate ALL quantities in fillPacks and pass the metadata back from the calculation function.
+        // Let's adjust fillPacks to get all quantities at once.
+        return { quantity: finalQuantity, seed: actualSeed }; // Return quantity and seed info
+
+
+    },
+
+
     // Alternating strategy: Assigns minQty and maxQty alternately.
     // Assumes MAX_QTY from constants.js and clamp are available.
     alternating: (config, index, total) => {
@@ -208,23 +226,83 @@ const MainThreadFillStrategies = {
          }
          return index % 2 === 0 ? minQty : maxQtyClamped;
     },
-
-    // Perlin strategy fallback: If the worker fails for Perlin, fall back to random.
-    // Assumes MainThreadFillStrategies.random is available.
-    perlin: (config, index, total) => {
-        // This function should ideally not be called if the worker is available for 'perlin'.
-        // If it is called, it means the worker failed or wasn't available.
-        // Fallback to random strategy.
-         GM_log("Pack Filler Pro: Perlin strategy called on main thread. Falling back to random.");
-         // Assumes MainThreadFillStrategies object and random strategy are available
-         if (typeof MainThreadFillStrategies === 'object' && typeof MainThreadFillStrategies.random === 'function') {
-             return MainThreadFillStrategies.random(config, index, total);
-         } else {
-             GM_log("Pack Filler Pro: MainThreadFillStrategies.random fallback not found.");
-             return 0; // Ultimate fallback if random strategy is also missing
-         }
-    }
 };
+
+
+/**
+ * Calculates quantities for a given set of inputs based on the configured strategy.
+ * Handles fixed, random, gradient, perlin, and alternating strategies on the main thread.
+ * Applies the maxTotalAmount constraint.
+ * Assumes MainThreadFillStrategies, clamp, generateSeed (for perlin), MAX_QTY are available.
+ * @param {Array<HTMLInputElement>} inputsToFill - The array of input elements to calculate quantities for.
+ * @param {object} config - The script's configuration object.
+ * @returns {{quantities: number[], metadata: object}} An object containing the calculated quantities and any relevant metadata (e.g., seed used).
+ * @throws {Error} Throws an error if the strategy function is not found.
+ */
+function calculateQuantitiesMainThread(inputsToFill, config) {
+    const quantities = [];
+    let metadata = {};
+    let currentTotal = 0;
+    const maxTotalAmount = clamp(config.maxTotalAmount, 0, Infinity); // Max total can be very large or 0
+    const totalPacksToFill = inputsToFill.length;
+
+    const strategy = MainThreadFillStrategies[config.patternType];
+
+    if (typeof strategy !== 'function') {
+        const errorMsg = `Main thread strategy function for "${config.patternType}" not found. Cannot calculate quantities.`;
+        GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
+        throw new Error(errorMsg);
+    }
+
+    // Special handling for Perlin to generate/use seed once for the batch
+    let perlinSeed = null;
+    if (config.patternType === 'perlin') {
+        perlinSeed = generateSeed(config.noiseSeed); // Generate/get seed once for the batch
+        metadata.seedUsed = perlinSeed; // Store seed in metadata
+    }
+
+
+    inputsToFill.forEach((input, index) => {
+        let qtyInfo;
+        if (config.patternType === 'perlin') {
+             // Pass the pre-generated seed for Perlin calculation
+             qtyInfo = MainThreadFillStrategies.perlin({ ...config, noiseSeed: perlinSeed }, index, totalPacksToFill);
+             // The perlin strategy function now returns { quantity, seed }
+             let qty = qtyInfo.quantity;
+
+              // Apply max total limit manually on main thread
+              if (maxTotalAmount > 0) {
+                   const remaining = maxTotalAmount - currentTotal;
+                   qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity and cap
+              }
+             quantities.push(qty);
+             currentTotal += qty;
+
+        } else {
+            // For other strategies, calculate quantity directly
+             let qty = strategy(config, index, totalPacksToFill);
+
+             // Apply max total limit manually on main thread
+             if (maxTotalAmount > 0) {
+                  const remaining = maxTotalAmount - currentTotal;
+                  qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity and cap
+             }
+            quantities.push(qty);
+            currentTotal += qty; // Add the quantity actually set to the total
+        }
+
+         // If max total is reached, fill remaining quantities with 0 and stop
+         if (maxTotalAmount > 0 && currentTotal >= maxTotalAmount) {
+              for (let j = index + 1; j < totalPacksToFill; j++) {
+                   quantities.push(0);
+              }
+              break; // Exit the forEach loop
+         }
+
+    });
+
+    return { quantities, metadata, totalCopiesAdded: currentTotal };
+}
 
 
 /**
@@ -262,21 +340,20 @@ function calculateFillCount(config, availableCount) {
 /* --- Main Fill Function --- */
 /**
  * Fills pack inputs based on current settings.
- * Incorporates pattern strategies and batch DOM updates, using a Web Worker for heavy calculations.
+ * Incorporates pattern strategies and batch DOM updates, all on the main thread.
  * Handles configuration validation, clearing inputs, filtering empty inputs,
- * calculating quantities (via worker or main thread), applying updates, and providing feedback.
+ * calculating quantities, applying updates, and providing feedback.
  * Assumes the following are available in scope:
  * getPackInputs, validateFillConfig, clearAllInputs, virtualUpdate, generateFeedback,
- * SWAL_ALERT, SWAL_TOAST, patternWorker instance, callWorkerAsync, handleWorkerMessage,
- * MainThreadFillStrategies, clamp, sanitize, MAX_QTY, DEFAULT_CONFIG.
+ * SWAL_ALERT, SWAL_TOAST, calculateQuantitiesMainThread, clamp, sanitize, MAX_QTY, DEFAULT_CONFIG.
  * @param {object} config - The script's configuration object.
  * @param {boolean} [isAutoFill=false] - True if triggered by the auto-load process.
  */
 async function fillPacks(config, isAutoFill = false) { // Accept config here and make async
-    GM_log(`Pack Filler Pro: fillPacks started (Auto-fill: ${isAutoFill}).`);
+    GM_log(`Pack Filler Pro: fillPacks started (Auto-fill: ${isAutoFill}, Main Thread Only).`);
 
     // Use config object directly
-    const { lastMode: mode, lastCount: count, lastFixedQty: fixedQty, lastMinQty: minQty, lastMaxQty: maxQty, lastClear: clear, maxTotalAmount, fillEmptyOnly, patternType } = config;
+    const { lastMode: mode, lastCount: count, lastClear: clear, fillEmptyOnly } = config;
 
     try {
         // 1. Validate relevant parts of config (quantities and pattern params)
@@ -392,147 +469,42 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
         }
 
 
-        GM_log("Pack Filler Pro: fillPacks Step 15: Proceeding to quantity calculation.");
+        GM_log("Pack Filler Pro: fillPacks Step 15: Proceeding to quantity calculation (Main Thread).");
 
         let quantitiesToApply = [];
-        let currentTotal = 0; // Track total added in this fill operation
+        let metadata = {}; // To store metadata like seed used (from main thread calculation)
+        let totalCopiesAdded = 0; // Track total added after calculation and max total application
 
-        const totalPacksToFill = inputsToActuallyFill.length; // The actual number of inputs we will attempt to fill
-        let calculationSource = "Main Thread";
-        let metadata = {}; // To store metadata from worker like seed used
-
-        // --- Core Filling Logic ---
-        // Determine quantities based on pattern or mode
-        const workerStrategies = ['perlin', 'gradient']; // Strategies that can run in worker
-        // Check if worker instance is available AND the selected pattern type is one the worker handles AND callWorkerAsync is available
-        const useWorker = workerStrategies.includes(patternType) && typeof patternWorker !== 'undefined' && patternWorker !== null && typeof callWorkerAsync === 'function';
-
-        GM_log(`Pack Filler Pro: fillPacks Step 16: Checking worker availability for pattern type "${patternType}". useWorker: ${useWorker}`);
-
-        if (useWorker) {
-            // Attempt to use the Web Worker for calculation
-            GM_log(`Pack Filler Pro: fillPacks Step 17: Attempting to use Web Worker for "${patternType}" calculation.`);
-            try {
-                 // Pass necessary config subset to the worker.
-                 // The worker needs min/max/maxTotalAmount/pattern specific configs.
-                 const workerConfig = {
-                      noiseSeed: config.noiseSeed,
-                      patternScale: config.patternScale,
-                      patternIntensity: config.patternIntensity,
-                      lastMinQty: config.lastMinQty,
-                      lastMaxQty: config.lastMaxQty,
-                      maxTotalAmount: config.maxTotalAmount, // Worker will apply maxTotalAmount constraint
-                 };
-                 const workerData = { strategy: patternType, count: totalPacksToFill, config: workerConfig };
-                 GM_log(`Pack Filler Pro: fillPacks Step 18: Calling worker with data:`, workerData);
-
-                 const result = await callWorkerAsync(workerData); // Await the worker result (Promise from callWorkerAsync)
-                 GM_log(`Pack Filler Pro: fillPacks Step 19: Received result from worker:`, result);
-
-                 quantitiesToApply = result.quantities || []; // Ensure it's an array, handle potential null/undefined
-                 metadata = result.metadata || {}; // Get metadata if available
-
-                 // Calculate total from worker results (worker should have applied maxTotalAmount)
-                 currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
-
-                 calculationSource = "Web Worker";
-                 if(metadata.seedUsed) calculationSource += ` (Seed: ${metadata.seedUsed})`;
-
-                 GM_log(`Pack Filler Pro: fillPacks Step 20: Quantities received from worker (${quantitiesToApply.length}). Calculated total: ${currentTotal}`);
-
-                 // Check if the number of quantities returned matches the number of inputs we intended to fill
-                 if (quantitiesToApply.length !== totalPacksToFill) {
-                      const errorMsg = `Worker returned unexpected number of quantities (${quantitiesToApply.length}) vs inputs to fill (${totalPacksToFill}).`;
-                      GM_log(`Pack Filler Pro: ERROR - ${errorMsg}`);
-                      // Decide whether to throw, warn, or use partial results. Throwing is safer to indicate a calculation issue.
-                      throw new Error(errorMsg);
-                 }
-
-
-            } catch (error) {
-                // Catch errors from callWorkerAsync (timeout, postMessage error, worker internal error)
-                GM_log(`Pack Filler Pro: fillPacks Step 17a: Worker calculation failed for "${patternType}": ${error.message}. Falling back to main thread random strategy.`, error);
-                // Worker failed, fall back to main thread random strategy
-                calculationSource = "Main Thread (Fallback)";
-                quantitiesToApply = []; // Clear any partial results from the failed worker attempt
-                currentTotal = 0; // Reset total for main thread calculation
-                metadata = {}; // Clear metadata
-
-                // Proceed with main thread calculation using the fallback strategy
-                const fallbackStrategy = MainThreadFillStrategies.random; // Fallback to random
-                 // Assumes MainThreadFillStrategies object and random strategy are available
-                 if (typeof MainThreadFillStrategies !== 'object' || typeof fallbackStrategy !== 'function') {
-                     const errorMsg = "Main thread fallback strategy (random) function not found.";
-                     GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-                     if (!isAutoFill && typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Error', errorMsg, 'error', config);
-                     throw new Error(errorMsg); // Abort if fallback is also missing
-                 }
-                 GM_log(`Pack Filler Pro: fillPacks Step 17b: Using main thread fallback strategy "random".`);
-
-                 // Calculate quantities on the main thread, applying max total constraint manually
-                 inputsToActuallyFill.forEach((input, index) => {
-                      let qty = fallbackStrategy(config, index, totalPacksToFill);
-                      // Apply max total limit on main thread
-                      if (maxTotalAmount > 0) {
-                           const remaining = maxTotalAmount - currentTotal;
-                           qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity and cap
-                      }
-                      quantitiesToApply.push(qty);
-                      currentTotal += qty; // Add the quantity actually set to the total
-                 });
-                 GM_log(`Pack Filler Pro: fillPacks Step 17c: Main thread fallback calculation complete. Generated ${quantitiesToApply.length} quantities. Final total: ${currentTotal}`);
-            }
-        } else {
-            // Not using a worker strategy or worker/callWorkerAsync is unavailable, use main thread calculation
-             // Assumes MainThreadFillStrategies object is available
-             if (typeof MainThreadFillStrategies !== 'object') {
-                  const errorMsg = "MainThreadFillStrategies object not found. Cannot calculate quantities.";
-                  GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-                   if (!isAutoFill && typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Error', errorMsg, 'error', config);
-                  throw new Error(errorMsg); // Abort if strategies object is missing
-             }
-            const mainThreadStrategy = MainThreadFillStrategies[patternType];
-             if (typeof mainThreadStrategy !== 'function') {
-                  // Fallback to random if the selected pattern strategy function is missing
-                  GM_log(`Pack Filler Pro: Main thread strategy "${patternType}" function not found. Falling back to random.`, {patternType: patternType});
-                  const fallbackStrategy = MainThreadFillStrategies.random;
-                  if (typeof fallbackStrategy !== 'function') {
-                      const errorMsg = "Main thread fallback strategy (random) function not found.";
-                      GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-                       if (!isAutoFill && typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Error', errorMsg, 'error', config);
-                      throw new Error(errorMsg); // Abort if random strategy is also missing
-                  }
-                  mainThreadStrategy = fallbackStrategy;
-             }
-
-            calculationSource = "Main Thread";
-            GM_log(`Pack Filler Pro: fillPacks Step 16a: Calculating quantities on main thread using strategy: "${mainThreadStrategy === MainThreadFillStrategies.random ? 'random (fallback)' : patternType}".`);
-
-             // Calculate quantities on the main thread, applying max total constraint manually
-             inputsToActuallyFill.forEach((input, index) => {
-                  let qty = mainThreadStrategy(config, index, totalPacksToFill);
-                  // Apply max total limit on main thread
-                  if (maxTotalAmount > 0) {
-                       const remaining = maxTotalAmount - currentTotal;
-                       qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity and cap
-                  }
-                  quantitiesToApply.push(qty);
-                  currentTotal += qty; // Add the quantity actually set to the total
-             });
-             GM_log(`Pack Filler Pro: fillPacks Step 16b: Main thread calculation complete. Generated ${quantitiesToApply.length} quantities. Final total: ${currentTotal}`);
+        // --- Core Filling Logic - All on Main Thread ---
+        GM_log(`Pack Filler Pro: fillPacks Step 16: Calculating quantities on main thread using strategy: "${config.patternType}".`);
+        // Assumes calculateQuantitiesMainThread is available in this file's scope
+        if (typeof calculateQuantitiesMainThread !== 'function') {
+            const errorMsg = "calculateQuantitiesMainThread function not found within fillLogic.js.";
+            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
+             if (!isAutoFill && typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Error', errorMsg, 'error', config);
+            throw new ReferenceError(errorMsg); // Abort if calculation function is missing
         }
+
+        // Perform calculation on the main thread
+        const calculationResult = calculateQuantitiesMainThread(inputsToActuallyFill, config);
+        quantitiesToApply = calculationResult.quantities;
+        metadata = calculationResult.metadata;
+        totalCopiesAdded = calculationResult.totalCopiesAdded; // Get total from the calculation function
+
+        GM_log(`Pack Filler Pro: fillPacks Step 17: Main thread calculation complete. Generated ${quantitiesToApply.length} quantities. Final total: ${totalCopiesAdded}`);
+        const calculationSource = "Main Thread"; // Source is always main thread in this version
 
 
         // --- Apply Quantities to DOM ---
-        GM_log(`Pack Filler Pro: fillPacks Step 21: Applying quantities to DOM. Count: ${quantitiesToApply.length}`);
+        GM_log(`Pack Filler Pro: fillPacks Step 18: Applying quantities to DOM. Count: ${quantitiesToApply.length}`);
          // Assumes virtualUpdate function is available in scope
         if (quantitiesToApply.length > 0 && typeof virtualUpdate === 'function') {
             // Use the batch update function
             // Pass the original inputsToActuallyFill and the calculated quantities
             virtualUpdate(inputsToActuallyFill, quantitiesToApply);
-            GM_log("Pack Filler Pro: fillPacks Step 22: Quantities applied via virtualUpdate.");
+            GM_log("Pack Filler Pro: fillPacks Step 19: Quantities applied via virtualUpdate.");
         } else if (quantitiesToApply.length === 0) {
-             GM_log("Pack Filler Pro: fillPacks Step 21a: No quantities generated to apply.");
+             GM_log("Pack Filler Pro: fillPacks Step 18a: No quantities generated to apply.");
              // Pass config to SWAL_ALERT
              if (!isAutoFill && typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Packs', 'Calculation failed. No quantities generated.', 'error', config);
              return; // Abort if no quantities were generated
@@ -547,16 +519,16 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
          // --- DETAILED FEEDBACK GENERATION (SweetAlert2 Modal/Toast) ---
          // Only show modal/toast for manual fills or if autofill resulted in actual fills
-         GM_log("Pack Filler Pro: fillPacks Step 23: Generating feedback.");
+         GM_log("Pack Filler Pro: fillPacks Step 20: Generating feedback.");
          // Assumes generateFeedback and SWAL_TOAST, SWAL_ALERT are available
          if (!isAutoFill || (isAutoFill && filledCount > 0)) {
             if (typeof generateFeedback === 'function') {
                  // Pass all relevant info including the final calculated total
-                 generateFeedback(config, isAutoFill, calculationSource, targetedCount, availablePacks, filledCount, metadata, currentTotal);
+                 generateFeedback(config, isAutoFill, calculationSource, targetedCount, availablePacks, filledCount, metadata, totalCopiesAdded);
             } else {
                  GM_log("Pack Filler Pro: generateFeedback function not found. Skipping feedback.");
                  // Fallback logging if feedback function is missing
-                 const feedbackSummary = `Fill complete. Auto-fill: ${isAutoFill}, Source: ${calculationSource}, Targeted: ${targetedCount}/${availablePacks}, Filled: ${filledCount}, Total Added: ${currentTotal}.`;
+                 const feedbackSummary = `Fill complete. Auto-fill: ${isAutoFill}, Source: ${calculationSource}, Targeted: ${targetedCount}/${availablePacks}, Filled: ${filledCount}, Total Added: ${totalCopiesAdded}.`;
                  GM_log(feedbackSummary);
                  if (!isAutoFill && typeof SWAL_TOAST === 'function') SWAL_TOAST(`Fill Complete: ${filledCount} packs filled.`, 'success', config);
 
@@ -568,7 +540,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
      } catch (error) {
          GM_log(`Pack Filler Pro: fillPacks Caught Error: ${error.message}`, error);
          // Pass config to SWAL_ALERT for user feedback
-         if (!isAutoFill && typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') {
+         if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') {
              SWAL_ALERT('Fill Error', sanitize(error.message), 'error', config);
          } else {
              // Fallback alert if SWAL or sanitize is missing
@@ -581,15 +553,15 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
 /**
  * Selects one random visible pack input and fills it based on current settings.
- * Uses current config for quantity calculation (via worker or main thread).
+ * Uses current config for quantity calculation on the main thread.
  * Provides user feedback via SweetAlert2 toast.
  * Assumes the following are available in scope:
  * getPackInputs, validateFillConfig, updateInput, SWAL_ALERT, SWAL_TOAST,
- * patternWorker instance, callWorkerAsync, MainThreadFillStrategies, clamp, sanitize, MAX_QTY.
+ * MainThreadFillStrategies, clamp, sanitize, MAX_QTY, generateSeed (for perlin).
  * @param {object} config - The script's configuration object.
  */
-async function fillRandomPackInput(config) {
-    GM_log("Pack Filler Pro: Attempting to fill 1 random pack.");
+async function fillRandomPackInput(config) { // Accept config here and make async
+    GM_log("Pack Filler Pro: Attempting to fill 1 random pack (Main Thread Only).");
     try {
         // 1. Validate relevant parts of config (quantities)
         if (typeof validateFillConfig !== 'function') {
@@ -620,104 +592,58 @@ async function fillRandomPackInput(config) {
         const targetInput = allInputs[randomIndex];
         const packAlias = targetInput.dataset.alias || targetInput.dataset.set || `Input #${randomIndex + 1}`; // Get name for feedback
 
-        // 4. Determine quantity for this single pack
+        // 4. Determine quantity for this single pack (Always Main Thread)
         let quantity = 0;
-        let calculationSource = "Main Thread";
-        let metadata = {}; // To store metadata from worker
+        let metadata = {}; // To store metadata like seed used
 
         const patternType = config.patternType;
-        const workerStrategies = ['perlin', 'gradient']; // Strategies that can run in worker
-        // Check if worker instance is available AND the strategy is one the worker handles AND callWorkerAsync is available
-        const useWorker = workerStrategies.includes(patternType) && typeof patternWorker !== 'undefined' && patternWorker !== null && typeof callWorkerAsync === 'function';
 
-
-        if (useWorker) {
-            // Attempt to use the Web Worker for calculation (for a single item)
-            GM_log(`Pack Filler Pro: Calculating quantity for random pack via worker: ${patternType}`);
-            try {
-                 // Pass necessary config subset to the worker
-                 const workerConfig = {
-                      noiseSeed: config.noiseSeed,
-                      patternScale: config.patternScale,
-                      patternIntensity: config.patternIntensity,
-                      lastMinQty: config.lastMinQty,
-                      lastMaxQty: config.lastMaxQty,
-                      // maxTotalAmount is not relevant for a single random fill's quantity calculation in the worker
-                 };
-                 // Request calculation for just one item (index 0 of 1)
-                 const workerData = { strategy: patternType, count: 1, config: workerConfig };
-                 const result = await callWorkerAsync(workerData); // Await the worker result
-
-                 if (result.quantities && result.quantities.length > 0) {
-                     quantity = result.quantities[0]; // Get the single quantity calculated
-                     metadata = result.metadata || {};
-                     calculationSource = "Web Worker";
-                     if(metadata.seedUsed) calculationSource += ` (Seed: ${metadata.seedUsed})`;
-                 } else {
-                     // Worker returned no quantities, treat as a worker error
-                     throw new Error("Worker returned no quantities.");
-                 }
-
-            } catch (workerError) {
-                // Catch errors from callWorkerAsync (timeout, postMessage error, worker internal error)
-                GM_log(`Pack Filler Pro: Worker failed for random pack: ${workerError.message}. Using main thread random fallback.`, workerError);
-                calculationSource = "Main Thread (Fallback)";
-                // Fallback to main thread random
-                const fallbackStrategy = MainThreadFillStrategies.random;
-                 // Assumes MainThreadFillStrategies object and random strategy are available
-                 if (typeof MainThreadFillStrategies !== 'object' || typeof fallbackStrategy !== 'function') {
-                      const errorMsg = "Main thread fallback strategy (random) function not found.";
-                      GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-                       if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Random Error', errorMsg, 'error', config);
-                      throw new Error(errorMsg); // Abort if fallback is also missing
-                 }
-                quantity = fallbackStrategy(config, 0, 1); // Calculate one random value
-                // Clamp result according to main thread strategy rules (random already does this)
-                // Use clamp from domUtils or local clamp
-                 const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99;
-                 if (typeof clamp === 'function') {
-                      quantity = clamp(quantity, 0, maxQty); // Clamp against absolute MAX_QTY
-                 } else {
-                      GM_log("Pack Filler Pro: clamp function not found for final clamp in fallback.");
-                 }
-            }
-        } else {
-            // Use Main Thread calculation
-             // Assumes MainThreadFillStrategies object is available
-             if (typeof MainThreadFillStrategies !== 'object') {
-                  const errorMsg = "MainThreadFillStrategies object not found. Cannot calculate quantity.";
+        // Use Main Thread calculation
+         // Assumes MainThreadFillStrategies object is available
+         if (typeof MainThreadFillStrategies !== 'object') {
+              const errorMsg = "MainThreadFillStrategies object not found. Cannot calculate quantity.";
+              GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
+               if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Random Error', errorMsg, 'error', config);
+              throw new Error(errorMsg); // Abort if strategies object is missing
+         }
+        const mainThreadStrategy = MainThreadFillStrategies[patternType];
+         if (typeof mainThreadStrategy !== 'function') {
+              // Fallback to random if the selected pattern strategy function is missing
+              GM_log(`Pack Filler Pro: Main thread strategy "${patternType}" function not found. Falling back to random.`, {patternType: patternType});
+              const fallbackStrategy = MainThreadFillStrategies.random;
+              if (typeof fallbackStrategy !== 'function') {
+                  const errorMsg = "Main thread fallback strategy (random) function not found.";
                   GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
                    if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Random Error', errorMsg, 'error', config);
-                  throw new Error(errorMsg); // Abort if strategies object is missing
-             }
-            const mainThreadStrategy = MainThreadFillStrategies[patternType];
-             if (typeof mainThreadStrategy !== 'function') {
-                  // Fallback to random if the selected pattern strategy function is missing
-                  GM_log(`Pack Filler Pro: Main thread strategy "${patternType}" function not found. Falling back to random.`, {patternType: patternType});
-                  const fallbackStrategy = MainThreadFillStrategies.random;
-                  if (typeof fallbackStrategy !== 'function') {
-                      const errorMsg = "Main thread fallback strategy (random) function not found.";
-                      GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-                       if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Fill Random Error', errorMsg, 'error', config);
-                      throw new Error(errorMsg); // Abort if random strategy is also missing
-                  }
-                  mainThreadStrategy = fallbackStrategy;
-             }
+                  throw new Error(errorMsg); // Abort if random strategy is also missing
+              }
+              mainThreadStrategy = fallbackStrategy;
+         }
 
+        const calculationSource = "Main Thread";
+        GM_log(`Pack Filler Pro: Calculating quantity for random pack on main thread using strategy: "${mainThreadStrategy === MainThreadFillStrategies.random ? 'random (fallback)' : patternType}".`);
 
-            calculationSource = "Main Thread";
-            GM_log(`Pack Filler Pro: Calculating quantity for random pack on main thread using strategy: "${mainThreadStrategy === MainThreadFillStrategies.random ? 'random (fallback)' : patternType}".`);
-            quantity = mainThreadStrategy(config, 0, 1); // Calculate for index 0 of total 1
-            // Clamp result according to main thread strategy rules
-            // (MainThreadFillStrategies already handle clamping to min/max and MAX_QTY)
-             // Use clamp from domUtils or local clamp
-             const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99;
-             if (typeof clamp === 'function') {
-                  quantity = clamp(quantity, 0, maxQty); // Final clamp against absolute MAX_QTY
-             } else {
-                  GM_log("Pack Filler Pro: clamp function not found for final clamp on main thread.");
-             }
+        // Calculate quantity. For Perlin, get seed here.
+        if (patternType === 'perlin' && mainThreadStrategy === MainThreadFillStrategies.perlin) {
+             const actualSeed = generateSeed(config.noiseSeed);
+             metadata.seedUsed = actualSeed;
+             // Call Perlin strategy, passing the seed and faking total/index for a single pack
+             quantity = mainThreadStrategy({ ...config, noiseSeed: actualSeed }, 0, 1).quantity; // Get quantity from result object
+        } else {
+            // Calculate quantity for other strategies
+             quantity = mainThreadStrategy(config, 0, 1); // Calculate for index 0 of total 1
         }
+
+        // Clamp result according to main thread strategy rules
+        // (MainThreadFillStrategies already handle clamping to min/max and MAX_QTY)
+         // Use clamp from domUtils or local clamp
+         const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99;
+         if (typeof clamp === 'function') {
+              quantity = clamp(quantity, 0, maxQty); // Final clamp against absolute MAX_QTY
+         } else {
+              GM_log("Pack Filler Pro: clamp function not found for final clamp on main thread.");
+         }
+
 
         // 5. Apply Quantity
          if (typeof updateInput !== 'function') {
@@ -731,7 +657,10 @@ async function fillRandomPackInput(config) {
         // 6. Feedback
          // Assumes SWAL_TOAST and sanitize are available
          if (typeof SWAL_TOAST === 'function' && typeof sanitize === 'function') {
-             const feedbackText = `Set "${sanitize(packAlias)}" to ${quantity} (via ${calculationSource})`;
+             let feedbackText = `Set "${sanitize(packAlias)}" to ${quantity} (via ${calculationSource})`;
+              if (patternType === 'perlin' && metadata.seedUsed) {
+                  feedbackText += ` (Seed: ${metadata.seedUsed})`;
+              }
              SWAL_TOAST(feedbackText, 'success', config);
              GM_log(`Pack Filler Pro: Applied quantity ${quantity} to random pack: ${packAlias} (Source: ${calculationSource}).`);
          } else {
@@ -759,7 +688,7 @@ async function fillRandomPackInput(config) {
  * Assumes SWAL_ALERT, SWAL_TOAST, sanitize, MainThreadFillStrategies are available.
  * @param {object} config - The script's configuration object.
  * @param {boolean} isAutoFill - True if triggered by auto-fill.
- * @param {string} calculationSource - Describes where calculation happened (Main Thread, Worker).
+ * @param {string} calculationSource - Describes where calculation happened (should always be "Main Thread" in this version).
  * @param {number} targetedCount - Number of packs targeted by mode/count.
  * @param {number} availableCount - Total number of visible packs.
  * @param {number} filledCount - Number of packs actually updated.
@@ -777,7 +706,8 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
     let feedbackQuantityDesc = "";
 
      // Check if MainThreadFillStrategies object is available before accessing properties
-     const isPatternStrategy = typeof MainThreadFillStrategies === 'object' && MainThreadFillStrategies[patternType] && patternType !== 'random';
+     const isPatternStrategy = typeof MainThreadFillStrategies === 'object' && MainThreadFillStrategies[patternType] && patternType !== 'random' && patternType !== 'fixed' && patternType !== 'alternating'; // Exclude simple strategies
+
 
     if (isPatternStrategy) {
         feedbackModeDesc = `Pattern Mode: ${patternType.charAt(0).toUpperCase() + patternType.slice(1)}`;
@@ -789,36 +719,36 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
         }
     } else {
         // Fallback or standard modes
-        switch (mode) {
+        switch (patternType) { // Use patternType for quantity description logic
             case 'fixed':
+                 feedbackQuantityDesc = `${fixedQty} copie${fixedQty === 1 ? '' : 's'} per pack (Fixed Pattern).`;
+                 break;
+            case 'random':
+                 feedbackQuantityDesc = `Random copies (${minQty}-${maxQty}) per pack (Random Pattern).`;
+                 break;
+             case 'alternating':
+                  feedbackQuantityDesc = `Alternating copies (${minQty}/${maxQty}) per pack (Alternating Pattern).`;
+                  break;
+            default: // Should not happen with validation, but defensive
+                feedbackQuantityDesc = `Quantity chosen per pack (Unknown Pattern: ${patternType}).`;
+        }
+
+        // Describe mode separately as it affects WHICH inputs are targeted
+        switch (mode) {
+            case 'fixed': // Refers to the number of packs
                 feedbackModeDesc = `Fixed Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                feedbackQuantityDesc = `${fixedQty} copie${fixedQty === 1 ? '' : 's'} per pack.`;
                 break;
-            case 'max': // This is the random range mode
+            case 'max': // Refers to the number of packs
                  feedbackModeDesc = `Random Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                 feedbackQuantityDesc = `Random copies (${minQty}-${maxQty}) per pack.`;
                  break;
             case 'unlimited':
                 feedbackModeDesc = `All Visible Packs Mode`;
-                // In unlimited mode, quantity is usually fixed, but could potentially use patterns too
-                // Let's base the description on the patternType if it's not random, otherwise fixed.
-                 const isUnlimitedPatternStrategy = typeof MainThreadFillStrategies === 'object' && MainThreadFillStrategies[patternType] && patternType !== 'random';
-                 if (isUnlimitedPatternStrategy) {
-                      const intensityDisplay = typeof config.patternIntensity === 'number' ? config.patternIntensity.toFixed(2) : 'N/A';
-                     feedbackQuantityDesc = `Pattern applied with scale ${config.patternScale}, intensity ${intensityDisplay}.`;
-                     if (patternType === 'perlin') {
-                         feedbackQuantityDesc += ` Seed: ${metadata.seedUsed || config.noiseSeed || 'Random'}.`;
-                     }
-                 } else {
-                     // Fallback to fixed quantity description if pattern is random or unavailable
-                     feedbackQuantityDesc = `${fixedQty} copie${fixedQty === 1 ? '' : 's'} per pack.`;
-                 }
                 break;
-            default:
+            default: // Should not happen
                 feedbackModeDesc = `Mode: ${mode}`;
-                feedbackQuantityDesc = `Quantity chosen per pack.`;
         }
     }
+
 
     const clearStatus = clear && !isAutoFill ? "<br>- Inputs Cleared First" : "";
     const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
@@ -839,7 +769,7 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
          <p><strong>Average Copies per Filled Pack:</strong> ${averagePerFilled}</p>
      `;
 
-     // Use sanitize for feedback HTML to prevent XSS if any part came from user input (like seed?)
+     // Use sanitize for feedback HTML to prevent basic HTML injection
      // Assumes sanitize function is available
      const sanitizedSummaryHtml = typeof sanitize === 'function' ? sanitize(summaryHtml) : summaryHtml;
 
@@ -901,8 +831,8 @@ function virtualUpdate(inputs, quantities) {
 // - fillRandomPackInput
 // - generateFeedback
 // - virtualUpdate
-// - handleWorkerMessage (set as the worker's onmessage handler in the main script)
+// - calculateQuantitiesMainThread
 
-// Note: chooseQuantity, lerp, MainThreadFillStrategies, callWorkerAsync,
-// _workerRequestId, _pendingWorkerRequests are internal helpers/variables
-// and are not explicitly exported, but are accessible within this file's scope.
+// Note: chooseQuantity, lerp, perlinNoise, generateSeed, MainThreadFillStrategies
+// are internal helpers/variables and are not explicitly exported,
+// but are accessible within this file's scope.
