@@ -1,64 +1,12 @@
-// This file contains the main logic for calculating and applying quantities to inputs.
-// Assumes constants, utils, helpers, config manager are available.
-// Assumes _pendingWorkerRequests object and _workerRequestId are managed globally (or scoped appropriately) by the main script.
+// This file contains the main logic for calculating and applying quantities...
 
 // --- Sanitization & Validation (Keep from previous revision) ---
 const sanitize = (str) => { /* ... */ };
 const validateFillConfig = (config) => { /* ... */ };
 
-// --- Worker Interaction (Modified for Page Context Injection) ---
-
-// NOTE: _workerRequestId and _pendingWorkerRequests are now managed in the main script's scope
-
-/**
- * Sends a message via window.postMessage to the injected script which forwards it to the worker.
- * Returns a Promise that will be resolved/rejected when the corresponding response is received
- * by the main script's window message listener.
- *
- * @param {object} data - Data to post (strategy, count, config).
- * @param {number} timeoutMs - Timeout duration in milliseconds.
- * @returns {Promise<object>} Promise resolving with { quantities, metadata } or rejecting with an error.
- */
-function callWorkerAsync(data, timeoutMs = 10000) { // Renamed slightly for clarity
-    // Check if the page context worker setup was successful (e.g., check a flag set during init)
-    // For simplicity, assume it was, or add a check here if needed.
-
-    const requestId = ++_workerRequestId; // Increment global request ID (managed in main script)
-    const messagePayload = { ...data, requestId }; // Add requestId
-
-    GM_log(`Pack Filler Pro: Preparing to post message to page context for worker (Request ID: ${requestId}).`);
-
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            delete _pendingWorkerRequests[requestId]; // Remove from global map
-            GM_log(`Pack Filler Pro: Worker request ${requestId} timed out after ${timeoutMs}ms.`);
-            reject(new Error(`Worker request timed out after ${timeoutMs / 1000} seconds.`));
-        }, timeoutMs);
-
-        // Store the resolve/reject functions and timeoutId globally for this request
-        _pendingWorkerRequests[requestId] = { resolve, reject, timeoutId };
-
-        // Post the message to the window (page context)
-        // The injected script will listen for 'source: pfp-contentscript-message'
-        try {
-            window.postMessage({
-                source: 'pfp-contentscript-message', // Identifier for the injected listener
-                payload: messagePayload
-            }, window.location.origin); // Target the current page origin for security
-             GM_log(`Pack Filler Pro: Posted message to page context listener (Request ID: ${requestId}).`);
-        } catch (postError) {
-             GM_log("Pack Filler Pro: Error posting message to page context:", postError);
-             // Clean up and reject if posting fails
-             clearTimeout(timeoutId);
-             delete _pendingWorkerRequests[requestId];
-             reject(new Error(`Failed to send message to page context: ${postError.message}`));
-        }
-    });
-}
-
-// NOTE: The function 'setupWorkerMessageHandler' is REMOVED from here.
-//       The listener for 'pfp-worker-message' events is added in the main script's init.
-
+// --- Worker Interaction (Keep from previous revision) ---
+// NOTE: _workerRequestId and _pendingWorkerRequests managed in main script
+function callWorkerAsync(data, timeoutMs = 10000) { /* ... */ }
 
 // --- Main Thread Fill Strategies & Helpers (Keep from previous revision) ---
 const fixedStrategy = (config, index, total) => { /* ... */ };
@@ -68,112 +16,81 @@ const gradientStrategyMain = (config, index, total) => { /* ... */ };
 function getMainThreadStrategy(type) { /* ... */ }
 function determineTargetInputs(allInputs, config) { /* ... */ }
 
+// --- Main Fill Function (Keep from previous revision) ---
+async function fillPacks(config, isAutoFill = false) { /* ... */ }
 
-// --- Main Fill Function (Modified to use callWorkerAsync) ---
+// --- New Function: Fill Single Random Pack ---
 
 /**
- * Fills pack inputs based on current settings.
- * Uses page-context worker via window.postMessage for complex patterns.
+ * Selects one random visible pack input and fills it based on current settings.
  * @param {object} config - The script's configuration object.
- * @param {boolean} [isAutoFill=false] - True if triggered by the auto-load process.
  */
-async function fillPacks(config, isAutoFill = false) {
-    GM_log(`Fill process started. Mode/Pattern: ${config.patternType}, AutoFill: ${isAutoFill}`);
-    let quantitiesToApply = [];
-    let workerMetadata = null;
-    let calculationSource = "Main Thread";
-
+async function fillRandomPackInput(config) {
+    GM_log("Attempting to fill 1 random pack.");
     try {
-        // 1. Validate Config
-        validateFillConfig(config);
+        // 1. Validate relevant parts of config (quantities)
+        validateFillConfig(config); // Reuse existing validation
 
-        // 2. Get Inputs & Determine Targets
+        // 2. Get Inputs
         const allInputs = getPackInputs();
-        if (allInputs.length === 0) { /* ... no inputs found ... */ return; }
-        const potentialInputsToFill = determineTargetInputs(allInputs, config);
-        const targetedCount = potentialInputsToFill.length;
-        if (targetedCount === 0) { /* ... no targets found ... */ return; }
+        if (allInputs.length === 0) {
+            SWAL_ALERT('No Inputs', 'No visible pack inputs found to select from.', 'warning', config);
+            return;
+        }
 
-        // 3. Handle Clear Option
-        if (config.lastClear && !isAutoFill) clearAllInputs();
+        // 3. Select Random Input
+        const randomIndex = Math.floor(Math.random() * allInputs.length);
+        const targetInput = allInputs[randomIndex];
+        const packAlias = targetInput.dataset.alias || targetInput.dataset.set || `Input #${randomIndex + 1}`; // Get name for feedback
 
-        // 4. Filter by 'Fill Empty Only'
-        const fillEmptyOnly = config.fillEmptyOnly;
-        const inputsToActuallyFill = fillEmptyOnly
-            ? potentialInputsToFill.filter(el => !el.value || parseInt(el.value, 10) === 0)
-            : potentialInputsToFill;
-        const finalFillCount = inputsToActuallyFill.length;
-        if (finalFillCount === 0) { /* ... no action needed ... */ return; }
-
-        // 5. Calculate Quantities
+        // 4. Calculate Quantity (using current patternType setting)
+        let quantity = 0;
+        let calculationSource = "Main Thread";
         const patternType = config.patternType;
-        const workerStrategies = ['simplex', 'gradient']; // Strategies suitable for worker
-        const useWorker = workerStrategies.includes(patternType); // Check if worker should be used
+        const workerStrategies = ['simplex', 'gradient'];
+        const useWorker = workerStrategies.includes(patternType) && isPageContextWorkerInjected; // Check flag from main script
 
         if (useWorker) {
-            calculationSource = "Web Worker (Page Context)";
-            GM_log(`Attempting calculation via page context worker: ${patternType}`);
-            try {
+            calculationSource = "Web Worker";
+            GM_log(`Calculating quantity for random pack via worker: ${patternType}`);
+             try {
                 const workerConfig = { /* ... config subset for worker ... */ };
-                const workerData = { strategy: patternType, count: finalFillCount, config: workerConfig };
-
-                // Call worker via window.postMessage and wait for result
-                const result = await callWorkerAsync(workerData); // *** USE ASYNC CALL ***
-                quantitiesToApply = result.quantities;
-                workerMetadata = result.metadata;
-                calculationSource += ` (Seed: ${workerMetadata.seedUsed ?? 'N/A'})`;
-                GM_log(`Worker calculation successful. Received ${quantitiesToApply.length} quantities.`);
-
-            } catch (workerError) {
-                // Fallback logic (same as previous revision)
-                GM_log(`Worker calculation failed: ${workerError.message}. Falling back.`);
-                SWAL_TOAST(`Worker failed: ${workerError.message}. Using random.`, 'warning', config);
-                calculationSource = "Main Thread (Fallback)";
-                const fallbackStrategy = getMainThreadStrategy('random');
-                const useMaxTotal = config.maxTotalAmount > 0;
-                let currentTotal = 0;
-                quantitiesToApply = inputsToActuallyFill.map((input, index) => {
-                    let qty = fallbackStrategy(config, index, finalFillCount);
-                    qty = clamp(qty, config.lastMinQty, Math.min(config.lastMaxQty, MAX_QTY));
-                    if (useMaxTotal) { /* ... limit by total ... */ }
-                    currentTotal += qty;
-                    return qty;
-                });
-                workerMetadata = { actualTotal: currentTotal, seedUsed: null };
-            }
+                // Request calculation for just one item (index 0 of 1)
+                const workerData = { strategy: patternType, count: 1, config: workerConfig };
+                const result = await callWorkerAsync(workerData);
+                quantity = result.quantities[0]; // Get the single quantity calculated
+                if(result.metadata?.seedUsed) calculationSource += ` (Seed: ${result.metadata.seedUsed})`;
+             } catch (workerError) {
+                  GM_log(`Worker failed for random pack: ${workerError.message}. Using main thread random.`);
+                  calculationSource = "Main Thread (Fallback)";
+                  const fallbackStrategy = getMainThreadStrategy('random');
+                  quantity = fallbackStrategy(config, 0, 1); // Calculate one random value
+                  quantity = clamp(quantity, config.lastMinQty, Math.min(config.lastMaxQty, MAX_QTY));
+             }
         } else {
-            // Main Thread calculation (same as previous revision)
+            // Use Main Thread calculation
             calculationSource = "Main Thread";
-            GM_log(`Calculating on main thread: ${patternType}`);
+            GM_log(`Calculating quantity for random pack on main thread: ${patternType}`);
             const strategyFn = getMainThreadStrategy(patternType);
-            const useMaxTotal = config.maxTotalAmount > 0;
-            let currentTotal = 0;
-            quantitiesToApply = inputsToActuallyFill.map((input, index) => {
-                let qty = strategyFn(config, index, finalFillCount);
-                qty = clamp(qty, 0, MAX_QTY); // Ensure absolute max
-                if (useMaxTotal) { /* ... limit by total ... */ }
-                currentTotal += qty;
-                return qty;
-            });
-            workerMetadata = { actualTotal: currentTotal, seedUsed: null };
+            quantity = strategyFn(config, 0, 1); // Calculate for index 0 of total 1
+             // Clamp result according to main thread strategy rules
+            quantity = clamp(quantity, config.lastMinQty, config.lastMaxQty);
+            quantity = clamp(quantity, 0, MAX_QTY); // Clamp against absolute MAX_QTY
         }
 
-        // 6. Apply Quantities to DOM
-        if (quantitiesToApply.length > 0) {
-            virtualUpdate(inputsToActuallyFill, quantitiesToApply); // Use simplified version
-            GM_log(`Applied ${quantitiesToApply.length} quantities.`);
-        }
+        // 5. Apply Quantity
+        updateInput(targetInput, quantity); // Use utility function
+        GM_log(`Applied quantity ${quantity} to random pack: ${packAlias}`);
 
-        // 7. Generate and Show Feedback
-        if (!isAutoFill || (isAutoFill && finalFillCount > 0)) {
-            generateFeedback(config, isAutoFill, calculationSource, targetedCount, allInputs.length, finalFillCount, workerMetadata);
-        }
+        // 6. Feedback
+        SWAL_TOAST(`Set "${sanitize(packAlias)}" to ${quantity} (via ${calculationSource})`, 'success', config);
 
     } catch (error) {
-        GM_log(`Fill Error: ${error.message}`, error);
-        SWAL_ALERT('Fill Error', sanitize(error.message), 'error', config);
+         GM_log(`Fill Random Pack Error: ${error.message}`, error);
+         SWAL_ALERT('Fill Random Error', sanitize(error.message), 'error', config);
     }
 }
+
 
 // --- virtualUpdate & generateFeedback (Keep from previous revision) ---
 function virtualUpdate(inputs, quantities) { /* ... */ }
