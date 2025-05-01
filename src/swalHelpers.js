@@ -3,25 +3,30 @@
 // loaded via @require in the main script.
 // Note: This module now accepts the 'config' object to apply dark mode if needed.
 
-// Assumes window.Swal and GM_log are available in the main script's scope.
+// Assumes window.Swal, GM_log, and sanitize from domUtils.js are available in the main script's scope.
+
 
 /* --- SweetAlert2 Custom Alerts --- */
 /**
  * Shows a standard SweetAlert2 modal.
  * Provides a fallback to native alert if SweetAlert2 is not available.
- * Assumes window.Swal and GM_log are available.
+ * Assumes window.Swal, GM_log, and sanitize are available.
  * @param {string} title - The title of the modal.
  * @param {string} html - The HTML content of the modal body.
  * @param {string} [icon='info'] - The icon type ('success', 'error', 'warning', 'info', 'question').
  * @param {object} [config=null] - The script's configuration object (needed for dark mode). Can be null.
  */
 function SWAL_ALERT(title, html, icon = 'info', config = null) {
-    // Assumes window.Swal is available via @require in main script
+    // Check critical dependencies
     if (typeof window.Swal === 'undefined') {
-        GM_log(`SweetAlert2 not available. Falling back to alert: ${title} - ${html}`); // Assumes GM_log is available
+        GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 not available. Falling back to alert: ${title} - ${html}`);
         alert(`${title}\n\n${html}`); // Fallback if Swal is missing
         return;
     }
+    // Sanitize inputs for safety before using in HTML
+    const sanitizedTitle = typeof sanitize === 'function' ? sanitize(title) : title;
+    const sanitizedHtml = typeof sanitize === 'function' ? sanitize(html) : html;
+
 
     const customClasses = {
         popup: 'pfp-swal-popup',
@@ -42,8 +47,8 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
 
     try {
         window.Swal.fire({
-            title: title,
-            html: html,
+            title: sanitizedTitle, // Use sanitized title
+            html: sanitizedHtml, // Use sanitized html
             icon: icon,
             confirmButtonText: 'OK',
             customClass: customClasses,
@@ -54,6 +59,7 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
     } catch (e) {
         GM_log("Pack Filler Pro: Error displaying SweetAlert2 modal.", e);
         // Fallback to native alert if Swal.fire throws an error
+         GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 threw error. Falling back to alert: ${title} - ${html}`, e);
         alert(`${title}\n\n${html}`);
     }
 }
@@ -61,17 +67,20 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
  /**
   * Shows a SweetAlert2 toast notification.
   * Provides a fallback log if SweetAlert2 is not available.
-  * Assumes window.Swal and GM_log are available.
+  * Assumes window.Swal, GM_log, and sanitize from domUtils.js are available.
   * @param {string} title - The title/text of the toast.
   * @param {string} [icon='info'] - The icon type ('success', 'error', 'warning', 'info', 'question').
   * @param {object} [config=null] - The script's configuration object (needed for dark mode). Can be null.
   */
 function SWAL_TOAST(title, icon = 'info', config = null) {
-    // Assumes window.Swal is available via @require in main script
+    // Check critical dependencies
     if (typeof window.Swal === 'undefined') {
-         GM_log(`SweetAlert2 not available. Falling back to toast log: ${title}`); // Assumes GM_log is available
+         GM_log(`Pack Filler Pro SWAL_TOAST Error: SweetAlert2 not available. Skipping toast: ${title}`);
          return;
     }
+    // Sanitize title for safety (though less critical for toasts usually)
+    const sanitizedTitle = typeof sanitize === 'function' ? sanitize(title) : title;
+
 
     const customClasses = {
         popup: 'pfp-swal-toast-popup'
@@ -93,17 +102,19 @@ function SWAL_TOAST(title, icon = 'info', config = null) {
             timerProgressBar: true,
             customClass: customClasses,
              didOpen: (toast) => {
-                 // Add event listeners to pause/resume timer on hover
-                 if (toast) {
+                 // Check if toast is a valid element before adding listeners
+                 if (toast instanceof HTMLElement) {
                       toast.addEventListener('mouseenter', window.Swal.stopTimer);
                       toast.addEventListener('mouseleave', window.Swal.resumeTimer);
+                 } else {
+                     GM_log("Pack Filler Pro: SWAL_TOAST didOpen: toast element not valid.");
                  }
              }
             // The didOpen logic for dark mode is handled in uiManager.js now via MutationObserver
             // to handle subsequent toasts.
         }).fire({
             icon: icon,
-            title: title
+            title: sanitizedTitle // Use sanitized title
         });
     } catch (e) {
         GM_log("Pack Filler Pro: Error displaying SweetAlert2 toast.", e);
