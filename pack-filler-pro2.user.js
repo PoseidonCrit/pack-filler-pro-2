@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         🎴F105.35 Pack Filler Pro – Sleek Edition (Main Thread Only)
+// @name         🎴F105.35 Pack Filler Pro – Sleek Edition (Main Thread Only, Improved)
 // @namespace    https://ygoprodeck.com
-// @version      🎴F105.35
-// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns (all calculations on main thread).
+// @version      🎴F105.35.1 // Incremented version for improved code
+// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns (all calculations on main thread). Includes improved robustness.
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -11,24 +11,24 @@
 // @grant        GM_log
 
 // --- External Libraries ---
-// Load core libraries first
-// cash-dom for DOM manipulation
-// SweetAlert2 for custom alerts/toasts (requiring multiple versions for compatibility)
-// simplebar (uncomment if you are actively using the SimpleBar custom scrollbar)
+// Load core libraries first. Order is important.
+// cash-dom for DOM manipulation (required by many modules)
+// SweetAlert2 for custom alerts/toasts (required by swalHelpers, domUtils, fillLogic, pageLoader, uiManager)
+// simplebar (optional, uncomment if you are actively using the SimpleBar custom scrollbar, required by uiManager)
 // IMPORTANT: Ensure these URLs are correct and accessible.
 // @require      https://cdn.jsdelivr.net/npm/cash-dom@8.1.0/dist/cash.min.js
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js
-// @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.8/sweetalert2.min.js // Include multiple CDNs for robustness
+// @require      https://unpkg.com/sweetalert2@11.10.8/dist/sweetalert2.min.js // Include multiple CDNs for robustness
 // // @require      https://cdn.jsdelivr.net/npm/simplebar@6.3.8/dist/simplebar.min.js
 
 // --- Internal Modules ---
-// Load constants first as they are used everywhere
-// Load helpers and managers that have fewer dependencies next
-// Load core logic (fillLogic) and features (pageLoader) that depend on helpers
-// Load UI components last as they wire everything together
-// IMPORTANT: The order of these @require directives is CRITICAL for avoiding ReferenceErrors
-// in some userscript managers. Ensure dependencies are loaded BEFORE the files that use them.
+// Load constants first as they are used everywhere.
+// Load helpers and managers that have fewer dependencies next.
+// Load core logic (fillLogic) and features (pageLoader) that depend on helpers.
+// Load UI components last as they wire everything together.
+// IMPORTANT: The order of these @require directives is CRITICAL for avoiding ReferenceErrors.
+// Ensure dependencies are loaded BEFORE the files that use them.
 
 // Constants used across the script
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/constants.js
@@ -84,102 +84,99 @@
 
     /* --- Initialize Script --- */
     // This function orchestrates the startup of the script.
-    function init() {
-        GM_log(`Pack Filler Pro v${GM_info.script.version} (Main Thread Only): Initialization started.`);
+    async function init() { // Made async to potentially await future async init tasks
+        GM_log(`Pack Filler Pro v${GM_info.script.version} (Main Thread Only, Improved): Initialization started.`);
 
-        // 1. Essential Dependency Checks (Libraries)
-        // Check if critical external libraries loaded correctly via @require.
+        // --- Essential Dependency Checks (Libraries and Core Modules) ---
+        // Check if critical external libraries and core modules loaded correctly via @require.
+        // Abort early if fundamental dependencies are missing.
         if (typeof window.cash === 'undefined') {
-            const errorMessage = "Cash-dom library not found. Please check @require directives or network connectivity. Script cannot run.";
-            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-            alert(`Pack Filler Pro Error: ${errorMessage}`); // Use native alert as Swal might not be loaded
-            return; // Abort initialization
+            const msg = "Cash-dom library not found. Check @require or network. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
         }
-         if (typeof window.Swal === 'undefined') {
-             const errorMessage = "SweetAlert2 library not found. Please check @require directives or network connectivity. Script cannot run.";
-             GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-             alert(`Pack Filler Pro Error: ${errorMessage}`); // Use native alert
-             return; // Abort initialization
+        if (typeof window.Swal === 'undefined') {
+             const msg = "SweetAlert2 library not found. Check @require or network. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+        }
+         // Check core internal modules based on the order of @require
+         if (typeof loadConfig !== 'function') {
+             const msg = "configManager module not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
          }
-        GM_log("Pack Filler Pro: Essential libraries (cash-dom, SweetAlert2) found.");
+         if (typeof addPanelCSS !== 'function') {
+             const msg = "uiCss module not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+         }
+         if (typeof getPackInputs !== 'function' || typeof updateInput !== 'function' || typeof clearAllInputs !== 'function' || typeof sanitize !== 'function') { // Added sanitize check
+             const msg = "domUtils module (or some functions) not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+         }
+         if (typeof fillPacks !== 'function' || typeof fillRandomPackInput !== 'function' || typeof virtualUpdate !== 'function' || typeof calculateQuantitiesMainThread !== 'function') { // Added calculateQuantitiesMainThread check
+             const msg = "fillLogic module (or some functions) not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+         }
+         if (typeof loadFullPageIfNeeded !== 'function') {
+              const msg = "pageLoader module not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+         }
+         if (typeof bindPanelEvents !== 'function' || typeof loadConfigIntoUI !== 'function' || typeof updateConfigFromUI !== 'function' || typeof updatePanelModeDisplay !== 'function' || typeof updatePanelVisibility !== 'function' || typeof applyDarkMode !== 'function' || typeof updateQuantityInputVisibility !== 'function' || typeof updatePatternParamsVisibility !== 'function') {
+             const msg = "uiManager module (or some functions) not found. Check @require order/URLs. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
+         }
+
+
+        GM_log("Pack Filler Pro: Essential libraries and core modules found.");
 
         // 2. Initialize Web Worker - SKIPPED IN THIS VERSION
         // The patternWorker is not used.
 
         // 3. Load Configuration
-        // Calls the loadConfig function from src/configManager.js
-        // Assumes loadConfig is available via @require.
         GM_log("Pack Filler Pro: Attempting to load config.");
-        if (typeof loadConfig === 'function') {
-             // Assign the returned config object to the 'config' variable in this scope.
-             config = loadConfig();
-             // Add a check to ensure loadConfig returned a valid object
-              if (!config || typeof config !== 'object') {
-                   const errorMessage = "Failed to load configuration. loadConfig did not return a valid object. Script cannot run correctly.";
-                   GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-                   alert(`Pack Filler Pro Error: ${errorMessage}`); // Use native alert
-                   return; // Stop initialization if config is bad
+        try {
+             config = loadConfig(); // loadConfig from configManager.js
+             if (!config || typeof config !== 'object') { // Double check return value
+                   const msg = "loadConfig did not return a valid object. Script aborted."; GM_log(`FATAL ERROR: ${msg}`); alert(`Pack Filler Pro Error: ${msg}`); return;
               }
              GM_log("Pack Filler Pro: Config loaded and assigned.", config);
-        } else {
-             const errorMessage = "loadConfig function not found. Cannot load configuration. Script cannot run.";
-             GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-             alert(`Pack Filler Pro Error: ${errorMessage}`); // Use native alert
-             return; // Abort initialization
+        } catch (e) {
+             const msg = `Error loading config: ${e.message}. Script aborted.`; GM_log(`FATAL ERROR: ${msg}`, e); alert(`Pack Filler Pro Error: ${msg}`); return;
         }
 
 
         // 4. Add CSS
-        // Calls the addPanelCSS function from src/uiCss.js
-        // Assumes addPanelCSS is available via @require and GM_addStyle is granted.
-        if (typeof addPanelCSS === 'function') {
-             addPanelCSS();
+        GM_log("Pack Filler Pro: Adding UI CSS.");
+        try {
+             addPanelCSS(); // addPanelCSS from uiCss.js
              GM_log("Pack Filler Pro: UI CSS added.");
-        } else {
-             GM_log("Pack Filler Pro: addPanelCSS function not found. UI CSS may not be applied.");
-             // Script can continue, but UI will be unstyled.
+        } catch (e) {
+             // CSS failing is not critical enough to abort the script, but log it.
+             GM_log(`Pack Filler Pro: ERROR - Failed to add UI CSS: ${e.message}`, e);
+             if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', `Failed to apply custom styles: ${sanitize(e.message)}.`, 'error', config);
         }
 
 
         // 5. Add Panel HTML to DOM and get element references
-        // Assumes panelHTML and panelToggleHTML strings are available from uiCss.js
-        // and PANEL_ID, TOGGLE_BUTTON_ID from constants.js
+        GM_log("Pack Filler Pro: Adding UI HTML elements.");
+        // Assumes panelHTML, panelToggleHTML from uiCss.js and PANEL_ID, TOGGLE_BUTTON_ID from constants.js are available
         if (typeof panelHTML === 'string' && typeof panelToggleHTML === 'string' && typeof PANEL_ID !== 'undefined' && typeof TOGGLE_BUTTON_ID !== 'undefined') {
-             document.body.insertAdjacentHTML('beforeend', panelHTML);
-             document.body.insertAdjacentHTML('beforeend', panelToggleHTML);
+             try {
+                  document.body.insertAdjacentHTML('beforeend', panelHTML);
+                  document.body.insertAdjacentHTML('beforeend', panelToggleHTML);
 
-             // Get references to the main panel and toggle button elements
-             panelElement = document.getElementById(PANEL_ID);
-             toggleButtonElement = document.getElementById(TOGGLE_BUTTON_ID);
+                  // Get references to the main panel and toggle button elements
+                  panelElement = document.getElementById(PANEL_ID);
+                  toggleButtonElement = document.getElementById(TOGGLE_BUTTON_ID);
 
-             // Check if UI elements were successfully added and log their presence
-             if (!panelElement) {
-                  const errorMessage = `Main panel element (#${PANEL_ID}) not found after insertion. UI may not be functional.`;
-                  GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-                   if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', errorMessage, 'error', config);
-                  // Script can potentially continue, but UI interaction will fail.
-             } else {
-                   GM_log(`Pack Filler Pro: Panel element (#${PANEL_ID}) found in DOM.`);
+                  if (!panelElement || !toggleButtonElement) {
+                       const msg = `UI elements (${PANEL_ID} or ${TOGGLE_BUTTON_ID}) not found after insertion. UI may not be functional.`;
+                       GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+                        if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', sanitize(msg), 'error', config);
+                       // Script can continue, but UI interaction will fail.
+                  } else {
+                      GM_log("Pack Filler Pro: UI elements added to DOM and references obtained.");
+                  }
+             } catch (e) {
+                  const msg = `Failed to insert UI HTML: ${e.message}. UI may not be created.`;
+                  GM_log(`Pack Filler Pro: ERROR - ${msg}`, e);
+                   if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', sanitize(msg), 'error', config);
+                  // Script can continue, but UI will be missing.
              }
-
-             if (!toggleButtonElement) {
-                  const errorMessage = `Toggle button element (#${TOGGLE_BUTTON_ID}) not found after insertion. UI may not be functional.`;
-                  GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-                   if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', errorMessage, 'error', config);
-                  // Script can potentially continue, but UI interaction will fail.
-             } else {
-                  GM_log(`Pack Filler Pro: Toggle button element (#${TOGGLE_BUTTON_ID}) found in DOM.`);
-             }
-             if (panelElement && toggleButtonElement) {
-                 GM_log("Pack Filler Pro: UI elements added to DOM and references obtained.");
-             } else {
-                 GM_log("Pack Filler Pro: Failed to obtain references for one or more UI elements.");
-             }
-
         } else {
-             const errorMessage = "UI HTML strings (panelHTML, panelToggleHTML) or ID constants not found. UI may not be created.";
-             GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-              if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', errorMessage, 'error', config);
+             const msg = "UI HTML strings or ID constants missing. UI may not be created.";
+             GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+              if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', sanitize(msg), 'error', config);
              // Script can continue, but UI will be missing.
         }
 
@@ -188,89 +185,98 @@
         // Check if SimpleBar library is available before initializing.
         // Assumes window.SimpleBar is available if SimpleBar is @require'd.
         // Assumes panelElement exists.
-        const panelBodyEl = panelElement ? panelElement.querySelector('.pfp-body') : null;
-        if (panelBodyEl && typeof window.SimpleBar !== 'undefined') {
-            try {
-                panelSimpleBarInstance = new window.SimpleBar(panelBodyEl);
-                GM_log("Pack Filler Pro: SimpleBar initialized.");
-            } catch (e) {
-                 GM_log("Pack Filler Pro: Failed to initialize SimpleBar.", e);
-                 panelSimpleBarInstance = null;
-                 // Script can continue, using native scrollbar.
+         if (panelElement && typeof window.SimpleBar !== 'undefined') {
+            const panelBodyEl = panelElement.querySelector('.pfp-body');
+            if (panelBodyEl) {
+                try {
+                    panelSimpleBarInstance = new window.SimpleBar(panelBodyEl);
+                    GM_log("Pack Filler Pro: SimpleBar initialized.");
+                } catch (e) {
+                     GM_log("Pack Filler Pro: Failed to initialize SimpleBar.", e);
+                     panelSimpleBarInstance = null;
+                     // Script can continue, using native scrollbar.
+                }
+            } else {
+                 GM_log("Pack Filler Pro: Panel body element not found for SimpleBar.");
             }
         } else {
-            GM_log("Pack Filler Pro: SimpleBar library not available or panel body not found. Using native scrollbar.");
+            GM_log("Pack Filler Pro: SimpleBar library not available or panel element not found. Using native scrollbar.");
             panelSimpleBarInstance = null;
         }
 
 
         // 7. Apply Initial Configuration to UI and State
-        // Calls functions from src/uiManager.js, passing the config object
-        // Assumes loadConfigIntoUI, updatePanelModeDisplay, updatePanelVisibility, applyDarkMode are available from uiManager.js
-        // Assumes config, panelElement, toggleButtonElement are available in scope.
-        if (typeof loadConfigIntoUI === 'function' && typeof updatePanelModeDisplay === 'function' && typeof updatePanelVisibility === 'function' && typeof applyDarkMode === 'function') {
-             loadConfigIntoUI(config); // Pass config here
+        // Assumes functions from uiManager.js are available and config, panelElement, toggleButtonElement are available.
+        if (typeof loadConfigIntoUI === 'function' && typeof updatePanelModeDisplay === 'function' && typeof updatePanelVisibility === 'function' && typeof applyDarkMode === 'function' && typeof updateQuantityInputVisibility === 'function' && typeof updatePatternParamsVisibility === 'function') {
+             // Apply loaded config to UI controls
+             loadConfigIntoUI(config); // Pass config
+             // Update panel state based on loaded config
              updatePanelModeDisplay(config.lastMode); // Pass mode from config
-             // Pass the initial position from config when setting initial visibility
-             // Ensure updatePanelVisibility is called AFTER panelElement and toggleButtonElement are confirmed to exist
+             updateQuantityInputVisibility(config.lastMode); // Set initial quantity input visibility
+             updatePatternParamsVisibility(config.patternType); // Set initial pattern params visibility
+
+             // Apply dark mode based on loaded config
+             applyDarkMode(config, config.isDarkMode); // Pass config
+
+             // Set initial panel visibility and position - only if elements exist
              if (panelElement && toggleButtonElement) {
-                  updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config here
+                  updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config
              } else {
                   GM_log("Pack Filler Pro: Skipping initial updatePanelVisibility because panel elements were not found.");
              }
-             applyDarkMode(config, config.isDarkMode); // Apply dark mode based on loaded config
+
              GM_log("Pack Filler Pro: Initial config applied to UI.");
+
         } else {
-             const errorMessage = "UI state management functions not found (loadConfigIntoUI, etc.). UI may not be correctly initialized.";
-             GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-              if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', errorMessage, 'error', config);
+             const msg = "UI state management functions not found. UI may not be correctly initialized.";
+             GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+              if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', sanitize(msg), 'error', config);
              // Script can continue, but UI state might be incorrect.
         }
 
 
         // 8. Bind Events
-        // Calls the bindPanelEvents function from src/uiManager.js, passing the config object
-        // Assumes bindPanelEvents is available from uiManager.js and config is available.
-        if (typeof bindPanelEvents === 'function') {
+        // Assumes bindPanelEvents from uiManager.js is available and config is available.
+         if (panelElement && toggleButtonElement && typeof bindPanelEvents === 'function') {
              bindPanelEvents(config); // Pass config here
              GM_log("Pack Filler Pro: UI events bound.");
-        } else {
-             const errorMessage = "bindPanelEvents function not found. UI events will not be bound.";
-             GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-              if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', errorMessage, 'error', config);
-             // Script can continue, but UI will not be interactive.
-        }
+         } else {
+              const msg = "UI elements or bindPanelEvents function not found. UI events will not be bound.";
+              GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+               if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('UI Error', sanitize(msg), 'error', config);
+              // Script can continue, but UI will not be interactive.
+         }
 
 
         // 9. Trigger Auto-load Full Page if enabled
-        // Calls the loadFullPageIfNeeded function from src/pageLoader.js
-        // Pass the config object explicitly to ensure it's available.
-        // Assumes loadFullPageIfNeeded and getPackInputs are available.
+        // Assumes loadFullPageIfNeeded from pageLoader.js is available.
         if (config.loadFullPage) {
             GM_log("Pack Filler Pro: Auto-load is enabled, scheduling loadFullPageIfNeeded.");
             if (typeof loadFullPageIfNeeded === 'function') {
                 // Delay slightly to allow page rendering
-                // Ensure config is passed correctly in the setTimeout callback
                 setTimeout(() => loadFullPageIfNeeded(config), 300); // Pass config here
             } else {
-                 const errorMessage = "loadFullPageIfNeeded function not found. Auto-loading will not run.";
-                 GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-                  if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('Auto-Load Error', errorMessage, 'error', config);
+                 const msg = "loadFullPageIfNeeded function not found. Auto-loading will not run.";
+                 GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+                  if(typeof SWAL_ALERT !== 'undefined') SWAL_ALERT('Auto-Load Error', sanitize(msg), 'error', config);
             }
 
         } else {
             GM_log("Pack Filler Pro: Auto-load is disabled.");
             // If not auto-loading, ensure the max count for the count input is set based on initially visible inputs
             // Uses $ from cash-dom and getPackInputs from src/domUtils.js
-             if (typeof getPackInputs === 'function' && typeof $ === 'function') {
-                $('#pfp-count').attr('max', getPackInputs().length);
-                GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
+            // Assumes getPackInputs, $, and clamp are available
+             if (typeof getPackInputs === 'function' && typeof $ === 'function' && typeof clamp === 'function') {
+                 const maxCount = getPackInputs().length;
+                 // Ensure the max attribute is set but not less than 0
+                  $('#pfp-count').attr('max', clamp(maxCount, 0, Infinity));
+                 GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
              } else {
-                 GM_log("Pack Filler Pro: getPackInputs or $ function not found. Could not set max count for input.");
+                 GM_log("Pack Filler Pro: getPackInputs, $, or clamp function not found. Could not set max count for input.");
              }
         }
 
-        GM_log("Pack Filler Pro: Initialization complete (Main Thread Only).");
+        GM_log("Pack Filler Pro: Initialization complete (Main Thread Only, Improved).");
     }
 
 
