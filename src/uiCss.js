@@ -17,8 +17,8 @@ const panelHTML = `
         </div>
         <div class="pfp-body" data-simplebar>
           <div class="pfp-form-group">
-            <label for="pfp-mode" class="pfp-label">Fill Mode:</label>
-            <select id="pfp-mode" class="pfp-select">
+            <label for="${MODE_SELECT_ID}" class="pfp-label">Fill Mode:</label>
+            <select id="${MODE_SELECT_ID}" class="pfp-select">
               <option value="fixed">Fixed Count</option>
               <option value="max">Random Count (Range)</option>
               <option value="unlimited">All Visible Packs</option>
@@ -26,23 +26,32 @@ const panelHTML = `
           </div>
 
           <div class="pfp-form-group" id="pfp-count-group">
-            <label for="pfp-count" class="pfp-label">Number of Packs to Fill:</label>
-            <input type="number" id="pfp-count" min="0" list="pfp-count-list" class="pfp-input" placeholder="e.g., 10" />
-                      </div>
+            <label for="${COUNT_INPUT_ID}" class="pfp-label">Number of Packs to Fill:</label>
+            <input type="number" id="${COUNT_INPUT_ID}" min="0" list="pfp-count-list" class="pfp-input" placeholder="e.g., 10" />
+            <datalist id="pfp-count-list">
+                <option value="1"><option value="5"><option value="10"><option value="24"><option value="50"><option value="100"><option value="250"><option value="500">
+            </datalist>
+          </div>
 
           <div class="pfp-form-group" id="pfp-fixed-group">
-            <label for="pfp-fixed" class="pfp-label">Copies per Pack:</label>
-            <input type="number" id="pfp-fixed" min="0" max="${MAX_QTY}" list="pfp-fixed-list" class="pfp-input" placeholder="e.g., 1 or 3" />
-                      </div>
+            <label for="${FIXED_INPUT_ID}" class="pfp-label">Copies per Pack:</label>
+            <input type="number" id="${FIXED_INPUT_ID}" min="0" max="${MAX_QTY}" list="pfp-fixed-list" class="pfp-input" placeholder="e.g., 1 or 3" />
+            <datalist id="pfp-fixed-list">
+                <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="50"><option value="99">
+            </datalist>
+          </div>
 
           <div id="pfp-range-inputs">
              <div class="pfp-form-group pfp-range-group">
-               <label for="pfp-min" class="pfp-label">Min Copies (Random):</label>
-               <input type="number" id="pfp-min" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 1" />
-                            </div>
+               <label for="${MIN_INPUT_ID}" class="pfp-label">Min Copies (Random):</label>
+               <input type="number" id="${MIN_INPUT_ID}" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 1" />
+               <datalist id="pfp-range-list">
+                    <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10"><option value="20"><option value="50">
+                </datalist>
+             </div>
              <div class="pfp-form-group pfp-range-group">
-               <label for="pfp-max" class="pfp-label">Max Copies (Random):</label>
-               <input type="number" id="pfp-max" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 5" />
+               <label for="${MAX_INPUT_ID}" class="pfp-label">Max Copies (Random):</label>
+               <input type="number" id="${MAX_INPUT_ID}" min="0" max="${MAX_QTY}" list="pfp-range-list" class="pfp-input" placeholder="e.g., 5" />
              </div>
              <div class="pfp-form-group pfp-range-group" id="pfp-max-total-group">
                <label for="${MAX_TOTAL_INPUT_ID}" class="pfp-label">Max Total Copies (0 to disable):</label>
@@ -50,7 +59,7 @@ const panelHTML = `
              </div>
           </div>
 
-          <div class="pfp-options-divider">Options</div>
+          <div class="pfp-options-divider">Pattern & Single Fill</div>
 
              <div class="pfp-form-group">
                  <label for="${PATTERN_TYPE_SELECT_ID}" class="pfp-label">Fill Pattern:</label>
@@ -82,61 +91,27 @@ const panelHTML = `
                  <button id="${FILL_RANDOM_BTN_ID}" class="pfp-button pfp-button-secondary" title="Fill a single random pack with a quantity based on settings">Fill 1 Random Pack</button>
              </div>
 
-             <div class="pfp-options-divider">Automation</div>
+             <div class="pfp-options-divider">General Options</div>
 
           <div class="pfp-form-check">
-            <input type="checkbox" id="pfp-clear" class="pfp-checkbox" />
-            <label for="pfp-clear" class="pfp-label pfp-label-inline">Clear inputs before filling</label>
+            <input type="checkbox" id="${CLEAR_INPUTS_CHECKBOX_ID}" class="pfp-checkbox" />
+            <label for="${CLEAR_INPUTS_CHECKBOX_ID}" class="pfp-label pfp-label-inline">Clear inputs before filling</label>
           </div>
          <div class="pfp-form-check">
             <input type="checkbox" id="${FILL_EMPTY_ONLY_CHECKBOX_ID}" class="pfp-checkbox" />
             <label for="${FILL_EMPTY_ONLY_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Only fill quantities for inputs that are currently empty or 0.">Fill empty inputs only</label>
           </div>
 
-
-          <div class="pfp-form-check">
-            <input type="checkbox" id="${FULL_PAGE_CHECKBOX_ID}" class="pfp-checkbox" />
-            <label for="${FULL_PAGE_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically scrolls to the end of the page on load to reveal all packs.">Auto-load all packs on page entry</label>
-          </div>
              <div class="pfp-form-check">
-            <input type="checkbox" id="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-checkbox" />
-            <label for="${SCROLL_TO_BOTTOM_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Use smooth scrolling when auto-loading. Disable if it causes issues.">Smooth scroll auto-load</label>
-          </div>
-
-
-         <div class="pfp-form-check">
-            <input type="checkbox" id="${AUTO_FILL_LOADED_CHECKBOX_ID}" class="pfp-checkbox" />
-            <label for="${AUTO_FILL_LOADED_CHECKBOX_ID}" class="pfp-label pfp-label-inline" title="Automatically fills quantities for new packs loaded by 'Auto-load all packs' AFTER loading is complete.">Auto-fill loaded packs</label>
-          </div>
-
-             <div class="pfp-options-divider">Page Interaction</div>
-
-             <div class="pfp-form-group pfp-inline-group">
-                 <label for="${CLICK_PAGE_RANDOM_COUNT_ID}" class="pfp-label pfp-label-inline">Click Page Random Button:</label>
-                 <input type="number" id="${CLICK_PAGE_RANDOM_COUNT_ID}" class="pfp-input pfp-inline-input" min="1" value="1" title="Number of times to click the page's default 'Open Random Pack' button">
-                 <button id="${CLICK_PAGE_RANDOM_BTN_ID}" class="pfp-button pfp-button-secondary pfp-inline-button" title="Trigger the page's default 'Open Random Pack' button">Go</button>
-             </div>
-
-
-          <div class="pfp-form-check">
             <input type="checkbox" id="${DARK_MODE_CHECKBOX_ID}" class="pfp-checkbox" />
             <label for="${DARK_MODE_CHECKBOX_ID}" class="pfp-label pfp-label-inline">Enable Dark Mode</label>
           </div>
 
           <div class="pfp-form-actions">
-            <button id="pfp-run" class="pfp-button pfp-button-primary" title="Fill pack inputs based on current settings">Fill Packs</button>
-            <button id="pfp-clear-btn" class="pfp-button pfp-button-secondary" title="Set all pack inputs to zero">Clear All</button>
+            <button id="${FILL_PACKS_BTN_ID}" class="pfp-button pfp-button-primary" title="Fill pack inputs based on current settings">Fill Packs</button>
+            <button id="${CLEAR_ALL_BTN_ID}" class="pfp-button pfp-button-secondary" title="Set all pack inputs to zero">Clear All</button>
           </div>
 
-          <datalist id="pfp-count-list">
-            <option value="1"><option value="5"><option value="10"><option value="24"><option value="50"><option value="100"><option value="250"><option value="500">
-          </datalist>
-          <datalist id="pfp-fixed-list">
-            <option value="0"><option value="1"><option value="3"><option value="5"><option value="10"><option value="20"><option value="50"><option value="99">
-          </datalist>
-          <datalist id="pfp-range-list">
-            <option value="0"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10"><option value="20"><option value="50">
-          </datalist>
         </div>
         <div class="pfp-footer">
           <span class="pfp-version">v${typeof GM_info !== 'undefined' && GM_info.script ? GM_info.script.version : 'N/A'}</span>
@@ -653,4 +628,83 @@ function addPanelCSS() {
          /*
          .simplebar-wrapper { ... }
          .simplebar-height-auto-observer { ... }
-         .simple...
+         .simplebar-content-wrapper { ... }
+         .simplebar-content { ... }
+         .simplebar-track { ... }
+         .simplebar-scrollbar { ... }
+         */
+
+         /* Hide SimpleBar scrollbar if not in use */
+         .pfp-body:not([data-simplebar]) {
+              overflow-y: auto; /* Fallback to native scroll */
+         }
+         /* Add specific overrides if SimpleBar is causing issues */
+         /*
+         .simplebar-track.simplebar-vertical { right: 0; width: 11px; }
+         .simplebar-scrollbar:before { background-color: rgba(0, 0, 0, 0.2); border-radius: 7px; }
+         */
+
+
+         /* Ensure the panel is draggable */
+         .pfp-panel .pfp-header {
+             cursor: grab;
+         }
+         .pfp-panel.dragging .pfp-header {
+             cursor: grabbing;
+         }
+
+         /* Ensure elements needed for UI management are present */
+         /* Add styles for showing/hiding pattern parameters */
+         #${PATTERN_PARAMS_DIV_ID} {
+             /* Default state - will be controlled by JS */
+         }
+
+         /* Style for range value displays */
+         .pfp-label span {
+             font-weight: bold;
+             color: var(--pfp-text-color);
+         }
+         .pfp-panel.dark-mode .pfp-label span {
+             color: var(--pfp-dark-text-color);
+         }
+
+
+         /* Media query for smaller screens */
+         @media (max-width: 600px) {
+             .pfp-panel {
+                 width: 95vw; /* Use almost full viewport width */
+                 max-width: none; /* Remove max-width constraint */
+                 right: 2.5vw !important; /* Center horizontally */
+                 left: 2.5vw !important;
+                 top: 10px !important; /* Position from top */
+                 bottom: auto !important; /* Remove bottom constraint */
+             }
+              .pfp-toggle-button {
+                 right: 5px; /* Adjust toggle button position */
+                 top: 5px;
+              }
+             .pfp-form-group.pfp-inline-group {
+                  flex-direction: column; /* Stack items vertically on small screens */
+                  align-items: flex-start; /* Align items to the start */
+             }
+              .pfp-form-group.pfp-inline-group .pfp-label {
+                   margin-bottom: 5px; /* Add back bottom margin */
+                   margin-right: 0; /* Remove right margin */
+              }
+              .pfp-form-group.pfp-inline-group .pfp-input.pfp-inline-input {
+                   margin-right: 0; /* Remove right margin */
+                   width: 100%; /* Make input full width */
+              }
+              .pfp-form-group.pfp-inline-group .pfp-button.pfp-inline-button {
+                   margin-top: 10px; /* Add space above the button */
+                   width: 100%; /* Make button full width */
+              }
+         }
+
+    `);
+    GM_log("Pack Filler Pro: UI CSS added.");
+}
+
+
+// The constants panelHTML, panelToggleHTML and the function addPanelCSS are made available
+// to the main script's scope via @require.
