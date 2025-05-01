@@ -44,7 +44,7 @@ const FillStrategies = {
          return index % 2 === 0 ? clamp(minQty, 0, MAX_QTY) : clamp(maxQty, 0, MAX_QTY);
     },
 
-    // Perlin strategy fallback (runs on main thread if worker fails)
+    // Perlin strategy fallback (runs on main thread if worker fails or is unavailable)
     perlinFallback: (config, index, total) => {
          // This requires the perlinNoise and clamp functions to be available
          // in the main thread's scope if the worker fails.
@@ -52,7 +52,7 @@ const FillStrategies = {
          // we might need to include perlinNoise/clamp in domUtils or similar.
          // For this iteration, this is a placeholder indicating where the fallback logic would go.
          // A more robust solution would ensure perlinNoise is available in the main thread.
-         GM_log("Pack Filler Pro: Perlin noise calculation falling back to main thread (worker failed). Performance may be impacted.");
+         GM_log("Pack Filler Pro: Perlin noise calculation falling back to main thread (worker failed or unavailable). Performance may be impacted.");
          // Replicate logic from worker (requires clamp and perlinNoise in this scope)
          // Assuming clamp and perlinNoise are available globally if this fallback is hit
          // Note: perlinNoise is NOT currently available in the main thread scope.
@@ -73,14 +73,15 @@ const FillStrategies = {
 function getFillStrategy(config, useFallback = false) {
     const type = config.patternType;
     if (useFallback && type === 'perlin') {
+        // If fallback is requested for Perlin, return the main thread fallback
         return FillStrategies.perlinFallback;
     }
     switch (type) {
         case 'perlin':
-             // If worker is available, the async fillPacks will use it.
+             // If not requesting fallback, return the worker placeholder (actual logic in worker)
              // This function is mainly for determining the *type* of strategy.
              // The actual execution logic is in fillPacks.
-             return FillStrategies.perlin; // Placeholder, actual logic in worker/fallback
+             return FillStrategies.perlin; // Placeholder for worker strategy
         case 'gradient':
             return FillStrategies.gradient;
         case 'alternating':
@@ -265,132 +266,94 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     let currentTotal = 0; // Track total added in this fill operation
     let maxTotalHit = false;
 
-    // Declare strategy outside the try block
-    let strategy;
+    const totalPacksToFill = inputsToActuallyFill.length;
 
+    // Determine the strategy to use for calculation
+    let calculationStrategy = null; // Will hold the actual function to call
 
     // --- Core Filling Logic ---
     // Determine quantities based on pattern or mode
-    if (patternType && patternType !== 'random') {
-         // Use pattern strategy (potentially offloaded to worker)
-         strategy = getFillStrategy(config, false); // Get the intended strategy
-         const totalPacksToFill = inputsToActuallyFill.length;
+    if (patternType === 'perlin' && typeof patternWorker !== 'undefined' && patternWorker !== null) {
+        // Attempt to use the Web Worker for Perlin
+        GM_log("Pack Filler Pro: Attempting to use Web Worker for Perlin noise calculation.");
+        try {
+            quantitiesToApply = await new Promise((resolve, reject) => {
+                // Ensure previous message handlers are cleared to avoid race conditions
+                patternWorker.onmessage = (e) => {
+                    if (e.data && e.data.type === 'result') {
+                        resolve(e.data.quantities);
+                    } else if (e.data && e.data.type === 'log') {
+                         // Handle logs from worker here if needed, or in the main worker.onmessage handler
+                         GM_log("Pack Filler Pro Worker Log (from fillPacks):", ...e.data.data);
+                    }
+                };
+                patternWorker.onerror = (error) => {
+                    GM_log("Pack Filler Pro: Web Worker error during calculation:", error);
+                    // On worker error, we will fall back to main thread calculation
+                    reject(error); // Reject the promise to trigger the catch block
+                };
+                // Post message to worker with necessary data
+                patternWorker.postMessage({
+                    strategy: patternType, // Should be 'perlin' here
+                    count: totalPacksToFill,
+                    config: { // Pass relevant config for the worker
+                         noiseSeed: config.noiseSeed,
+                         patternScale: config.patternScale,
+                         patternIntensity: config.patternIntensity,
+                         lastMinQty: config.lastMinQty,
+                         lastMaxQty: config.lastMaxQty,
+                         maxTotalAmount: config.maxTotalAmount,
+                         // fillEmptyOnly is handled on main thread
+                    }
+                });
+            });
 
-         // Check if we should use the worker for heavy patterns (like Perlin) AND worker is available
-         if (patternType === 'perlin' && typeof patternWorker !== 'undefined' && patternWorker !== null) {
-             GM_log("Pack Filler Pro: Using Web Worker for Perlin noise calculation.");
-             try {
-                 // Offload heavy computation to the worker
-                 quantitiesToApply = await new Promise((resolve, reject) => {
-                     // Ensure previous message handlers are cleared to avoid race conditions
-                     patternWorker.onmessage = (e) => {
-                         if (e.data && e.data.type === 'result') {
-                             resolve(e.data.quantities);
-                         } else if (e.data && e.data.type === 'log') {
-                              // Handle logs from worker here if needed, or in the main worker.onmessage handler
-                              GM_log("Pack Filler Pro Worker Log (from fillPacks):", ...e.data.data);
-                         }
-                     };
-                     patternWorker.onerror = (error) => {
-                         GM_log("Pack Filler Pro: Web Worker error during calculation:", error);
-                         // On worker error, we will fall back to main thread calculation
-                         reject(error); // Reject the promise to trigger the catch block
-                     };
-                     // Post message to worker with necessary data
-                     patternWorker.postMessage({
-                         strategy: patternType,
-                         count: totalPacksToFill,
-                         config: { // Pass relevant config for the worker
-                              noiseSeed: config.noiseSeed,
-                              patternScale: config.patternScale,
-                              patternIntensity: config.patternIntensity,
-                              lastMinQty: config.lastMinQty,
-                              lastMaxQty: config.lastMaxQty,
-                              maxTotalAmount: config.maxTotalAmount,
-                              // fillEmptyOnly is handled on main thread
-                         }
-                     });
-                 });
+            // If worker returned quantities, calculate total copies added
+            if (quantitiesToApply.length > 0) {
+                 currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
+                 if (useMaxTotal && currentTotal >= maxTotalAmount) maxTotalHit = true;
+            }
+            // Quantities are already calculated by the worker, no need for main thread loop
+            // calculationStrategy remains null, which is fine as quantitiesToApply is populated
+            GM_log("Pack Filler Pro: Quantities received from worker.");
 
-                 // If worker returned quantities, calculate total copies added
-                 if (quantitiesToApply.length > 0) {
-                      currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
-                      if (useMaxTotal && currentTotal >= maxTotalAmount) maxTotalHit = true;
-                 }
-
-             } catch (error) {
-                  GM_log("Pack Filler Pro: Error receiving data from worker or worker failed, falling back to main thread calculation.", error);
-                  // Fallback to main thread calculation if worker fails
-                  strategy = getFillStrategy(config, true); // Get fallback strategy (Perlin fallback or default random)
-                  // Recalculate quantities on the main thread using the fallback strategy
-                  quantitiesToApply = []; // Clear any partial results from the failed worker attempt
-                  currentTotal = 0; // Reset total for main thread calculation
-                  maxTotalHit = false; // Reset max total hit flag
-
-                  inputsToActuallyFill.forEach((input, index) => {
-                       // Ensure strategy is a function before calling it
-                       if (typeof strategy === 'function') {
-                            let qty = strategy(config, index, totalPacksToFill);
-                             // Apply max total limit on main thread
-                             if (useMaxTotal) {
-                                  const remaining = maxTotalAmount - currentTotal;
-                                  qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
-                                  if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
-                             }
-                             quantitiesToApply.push(qty); // Add to quantitiesToApply for batch update
-                             currentTotal += qty;
-                       } else {
-                            GM_log("Pack Filler Pro: Fallback strategy is not a function. Cannot calculate quantities.");
-                            // Handle this error case - perhaps fill with 0 or show a specific error
-                            quantitiesToApply.push(0); // Default to 0 if strategy is invalid
-                            // No need to update currentTotal or maxTotalHit if qty is 0
-                       }
-                  });
-             }
-
-         } else {
-             // Calculate pattern quantities on the main thread (for non-Perlin patterns or if worker is unavailable)
-             GM_log(`Pack Filler Pro: Calculating pattern (${patternType}) on main thread.`);
-             // strategy is already initialized above with the intended strategy (non-Perlin)
-             const totalPacksToFill = inputsToActuallyFill.length; // Recalculate total packs to fill
-
-             inputsToActuallyFill.forEach((input, index) => {
-                  // Ensure strategy is a function before calling it
-                  if (typeof strategy === 'function') {
-                      let qty = strategy(config, index, totalPacksToFill);
-
-                      // Apply Max Total Limit if active
-                      if (useMaxTotal) {
-                          const remaining = maxTotalAmount - currentTotal;
-                          qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
-                          if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
-                      }
-                      quantitiesToApply.push(qty);
-                      currentTotal += qty;
-                  } else {
-                       GM_log("Pack Filler Pro: Main thread strategy is not a function. Cannot calculate quantities.");
-                       quantitiesToApply.push(0); // Default to 0 if strategy is invalid
-                  }
-             });
-         }
-
+        } catch (error) {
+            GM_log("Pack Filler Pro: Worker calculation failed, falling back to main thread.", error);
+            // Worker failed, set strategy to fallback and proceed with main thread calculation
+            calculationStrategy = getFillStrategy(config, true); // Get Perlin fallback or default random
+            quantitiesToApply = []; // Clear any partial results from the failed worker attempt
+            currentTotal = 0; // Reset total for main thread calculation
+            maxTotalHit = false; // Reset max total hit flag
+        }
     } else {
-         // Use existing mode logic (fixed, random range, unlimited fixed)
-         GM_log(`Pack Filler Pro: Using standard fill mode (${mode}).`);
-         // strategy is already initialized with random, which is correct for this block
-         inputsToActuallyFill.forEach(input => {
-             let qty = chooseQuantity(config);
-
-             // Apply Max Total Limit if active (only relevant for fixed/unlimited fixed now)
-             if (useMaxTotal) {
-                 const remaining = maxTotalAmount - currentTotal;
-                 qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
-                 if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
-             }
-             quantitiesToApply.push(qty);
-             currentTotal += qty;
-         });
+        // Not using Perlin with a worker, determine main thread strategy
+        // This covers random, gradient, alternating, and Perlin if worker is unavailable
+        calculationStrategy = getFillStrategy(config, true); // Get appropriate main thread strategy (true ensures fallback if perlin was intended but worker failed)
+        GM_log(`Pack Filler Pro: Calculating quantities on main thread using strategy: ${patternType === 'perlin' ? 'Perlin Fallback' : patternType}.`);
     }
+
+    // If quantities were NOT calculated by the worker (i.e., fallback or non-worker strategy)
+    // AND a valid main thread strategy function was determined
+    if (quantitiesToApply.length === 0 && typeof calculationStrategy === 'function') {
+         inputsToActuallyFill.forEach((input, index) => {
+              let qty = calculationStrategy(config, index, totalPacksToFill);
+              // Apply max total limit on main thread
+              if (useMaxTotal) {
+                   const remaining = maxTotalAmount - currentTotal;
+                   qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
+                   if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
+              }
+              quantitiesToApply.push(qty);
+              currentTotal += qty;
+         });
+    } else if (quantitiesToApply.length === 0) {
+         // This case should ideally not happen if getFillStrategy always returns a function,
+         // but it's a safeguard.
+         GM_log("Pack Filler Pro: No quantities calculated and no valid main thread strategy found.");
+         if (!isAutoFill) SWAL_ALERT('Fill Packs', 'Calculation failed. No quantities generated.', 'error', config);
+         return; // Abort if no quantities were generated
+    }
+
 
     // --- Apply Quantities to DOM ---
     if (quantitiesToApply.length > 0) {
