@@ -6,15 +6,10 @@
 
 // It assumes the following are available in the main script's scope via @require:
 // - constants from constants.js (MAX_QTY, SELECTOR, etc.)
-// - functions from domUtils.js (getPackInputs, clamp, updateInput, clearAllInputs, sanitize) <--- Uses clamp from here
+// - functions from domUtils.js (getPackInputs, clamp, updateInput, clearAllInputs, sanitize)
 // - functions from swalHelpers.js (SWAL_ALERT, SWAL_TOAST)
 // - functions from configManager.js (validateFillConfig)
 // - GM_log function
-
-/* --- Worker Interaction - REMOVED IN THIS VERSION --- */
-// The Web Worker and related functions (callWorkerAsync, handleWorkerMessage) are
-// removed as all calculations are now done on the main thread.
-
 
 /* --- Main Thread Fill Strategies & Helpers --- */
 // Simple strategies that can run efficiently on the main thread.
@@ -29,9 +24,14 @@ const lerp = (a, b, t) => a + t * (b - a);
 // Based on Ken Perlin's original Java implementation.
 // Note: This is a 1D noise function suitable for a linear list of packs.
 // Seed is used to make the noise repeatable.
-// This is a direct copy from the original worker code's noise implementation.
 // Assumes clamp from domUtils.js is available.
 function perlinNoise(x, seed) {
+    // Check dependency
+    if (typeof clamp !== 'function') {
+         GM_log("Pack Filler Pro: perlinNoise dependency (clamp) missing. Returning 0.");
+         return 0;
+    }
+
     // Simple hashing function using bitwise operations and a seed.
     // Needs to be deterministic based on input (x) and seed.
     // Using prime multipliers and XOR with seed for mixing.
@@ -71,7 +71,6 @@ function perlinNoise(x, seed) {
 }
 
 // Generates a random seed if none is provided or if seed is an empty string (local to main thread)
-// Direct copy from original worker code.
 // Assumes GM_log is available.
 function generateSeed(seedInput) {
     // If seedInput is provided and is a non-empty string, try to parse it as an integer.
@@ -297,13 +296,13 @@ function calculateQuantitiesMainThread(inputsToFill, config) {
          // Use the seed that the perlin strategy will use (either config.noiseSeed or random)
          // Call generateSeed once with the config's seed input to get the actual seed used.
          // Assumes generateSeed is available in this file's scope
-          if (typeof generateSeed !== 'function') {
-              GM_log("Pack Filler Pro: Perlin strategy requires generateSeed function, which was not found.");
-              // Fallback to random seed if function is missing
-              metadata.seedUsed = Math.floor(Math.random() * 2**32);
-          } else {
+          if (typeof generateSeed === 'function') {
              perlinSeed = generateSeed(config.noiseSeed);
              metadata.seedUsed = perlinSeed; // Store seed in metadata
+          } else {
+              GM_log("Pack Filler Pro: Perlin strategy requires generateSeed function, which was not found. Falling back to random seed.");
+              // Fallback to random seed if function is missing
+              metadata.seedUsed = Math.floor(Math.random() * 2**32);
           }
     }
 
@@ -426,7 +425,7 @@ function calculateFillCount(config, availableCount) {
  * getPackInputs, validateFillConfig, clearAllInputs, virtualUpdate, generateFeedback,
  * SWAL_ALERT, SWAL_TOAST, calculateQuantitiesMainThread, clamp, sanitize, MAX_QTY, DEFAULT_CONFIG.
  * @param {object} config - The script's configuration object.
- * @param {boolean} [isAutoFill=false] - True if triggered by the auto-load process.
+ * @param {boolean} [isAutoFill=false] - True if triggered by the auto-load process (not used in essential version).
  */
 async function fillPacks(config, isAutoFill = false) { // Accept config here and make async
     GM_log(`Pack Filler Pro: fillPacks started (Auto-fill: ${isAutoFill}, Main Thread Only).`);
@@ -470,6 +469,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
         if (availablePacks === 0) {
              GM_log("Pack Filler Pro: fillPacks Step 5: No visible pack inputs found.");
              // Pass config to SWAL_ALERT
+             // isAutoFill is always false in this essential version
              if (!isAutoFill) SWAL_ALERT('Fill Packs', 'No visible pack inputs found on the page.', 'warning', config);
              GM_log("Fill operation aborted: No visible pack inputs found.");
              return; // Exit function if no inputs are found
@@ -497,14 +497,16 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
              const finalMessage = availablePacks > 0
                  ? `No packs targeted based on current mode (${mode}) and count (${count}).`
                  : 'No visible pack inputs found on the page.'; // Should have been caught earlier, but defensive
-             // Pass config to SWAL_ALERT
+
+             // isAutoFill is always false in this essential version
              if (!isAutoFill) SWAL_ALERT('Fill Packs', finalMessage, 'info', config);
              GM_log(`Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
-             return; // Exit function if no packs are targeted
+             return; // Exit function if no packs need filling
         }
 
         // 4. Apply 'Clear Before Fill' option (only for manual trigger)
         GM_log("Pack Filler Pro: fillPacks Step 9: Checking 'Clear Before Fill' option.");
+        // isAutoFill is always false in this essential version
         if (clear && !isAutoFill) {
             GM_log("Pack Filler Pro: fillPacks Step 10: Clearing all inputs.");
              // Assumes clearAllInputs from domUtils.js is accessible and handles its own feedback/logging
@@ -545,7 +547,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                      ? `All ${targetedCount} targeted packs already have a quantity, and 'Fill empty inputs only' is disabled.`
                      : `No packs matched criteria to fill.`; // Should ideally be caught earlier if targetedCount is 0
 
-             // Pass config to SWAL_ALERT
+             // isAutoFill is always false in this essential version
              if (!isAutoFill) SWAL_ALERT('Fill Packs', finalMessage, 'info', config);
              GM_log(`Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, Filled: ${filledCount}`);
              return; // Exit function if no packs need filling
@@ -567,6 +569,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
             if (!calculationResult || !Array.isArray(calculationResult.quantities)) {
                  const errorMsg = "calculateQuantitiesMainThread returned invalid result.";
                  GM_log(`Pack Filler Pro: ERROR - ${errorMsg}`, calculationResult);
+                 // isAutoFill is always false in this essential version
                  if (!isAutoFill) SWAL_ALERT('Fill Error', sanitize(errorMsg), 'error', config);
                  return; // Abort if calculation failed
             }
@@ -589,6 +592,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                  GM_log("Pack Filler Pro: fillPacks Step 18a: No quantities generated to apply.");
                  // This scenario should ideally be caught earlier if calculationResult.quantities is empty
                  const msg = 'Calculation resulted in zero quantities to apply.';
+                 // isAutoFill is always false in this essential version
                  if (!isAutoFill) SWAL_ALERT('Fill Packs', sanitize(msg), 'warning', config);
                  return; // Abort
             }
@@ -598,7 +602,8 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
              GM_log("Pack Filler Pro: fillPacks Step 20: Generating feedback.");
              // Assumes generateFeedback and SWAL_TOAST, SWAL_ALERT, sanitize are available
              // Check if feedback is needed based on trigger and filled count
-             if (!isAutoFill || (isAutoFill && filledCount > 0)) {
+             // isAutoFill is always false in this essential version, so feedback is always shown if filledCount > 0
+             if (filledCount > 0) {
                 if (typeof generateFeedback === 'function') {
                      // Pass all relevant info including the final calculated total
                      generateFeedback(config, isAutoFill, calculationSource, targetedCount, availablePacks, filledCount, metadata, totalCopiesAdded);
@@ -607,9 +612,13 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                      // Fallback logging if feedback function is missing
                      const feedbackSummary = `Fill complete. Auto-fill: ${isAutoFill}, Source: ${calculationSource}, Targeted: ${targetedCount}/${availablePacks}, Filled: ${filledCount}, Total Added: ${totalCopiesAdded}.`;
                      GM_log(feedbackSummary);
+                     // isAutoFill is always false in this essential version
                      if (!isAutoFill && typeof SWAL_TOAST === 'function') SWAL_TOAST(`Fill Complete: ${filledCount} packs filled.`, 'success', config);
 
                 }
+             } else {
+                 // If filledCount is 0, feedback was already handled earlier.
+                 GM_log("Pack Filler Pro: No packs filled, skipping feedback generation.");
              }
              GM_log("Pack Filler Pro: fillPacks finished.");
 
@@ -723,7 +732,7 @@ async function fillRandomPackInput(config) { // Accept config here and make asyn
              // Assumes generateSeed is available in this file's scope
              const actualSeed = typeof generateSeed === 'function' ? generateSeed(config.noiseSeed) : config.noiseSeed; // Fallback if generateSeed is missing
              metadata.seedUsed = actualSeed;
-             // Call Perlin strategy, passing the seed and faking total/index for a single pack
+             // Call Perlin strategy, passing the seed and faking total/index for a single pack (total 1, index 0)
              // The perlin strategy function now returns { quantity, seed }
              // Ensure perlinNoise and lerp are available for the strategy call
              if (typeof perlinNoise === 'function' && typeof lerp === 'function') {
@@ -792,7 +801,7 @@ async function fillRandomPackInput(config) { // Accept config here and make asyn
  * Generates and displays feedback using SweetAlert2.
  * Assumes SWAL_ALERT, SWAL_TOAST, sanitize, MainThreadFillStrategies are available.
  * @param {object} config - The script's configuration object.
- * @param {boolean} isAutoFill - True if triggered by auto-fill.
+ * @param {boolean} isAutoFill - True if triggered by auto-fill (always false in essential version).
  * @param {string} calculationSource - Describes where calculation happened (should always be "Main Thread" in this version).
  * @param {number} targetedCount - Number of packs targeted by mode/count.
  * @param {number} availableCount - Total number of visible packs.
@@ -824,8 +833,8 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
     if (isPatternStrategy) {
         feedbackModeDesc = `Pattern Mode: ${patternType.charAt(0).toUpperCase() + patternType.slice(1)}`;
         // Ensure patternIntensity is a number before calling toFixed
-        const intensityDisplay = typeof config.patternIntensity === 'number' ? config.patternIntensity.toFixed(2) : 'N/A';
-        feedbackQuantityDesc = `Pattern applied with scale ${config.patternScale}, intensity ${intensityDisplay}.`;
+        const intensityDisplay = typeof config.patternIntensity === 'number' ? (config.patternIntensity * 100).toFixed(0) : 'N/A'; // Display intensity as 0-100
+        feedbackQuantityDesc = `Pattern applied with scale ${config.patternScale}, intensity ${intensityDisplay}%.`;
         if (patternType === 'perlin') {
             feedbackQuantityDesc += ` Seed: ${metadata.seedUsed || config.noiseSeed || 'Random'}.`; // Use metadata seed if available
         }
@@ -862,8 +871,9 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
     }
 
 
+    // isAutoFill is always false in this essential version
     const clearStatus = clear && !isAutoFill ? "<br>- Inputs Cleared First" : "";
-    const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
+    const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : ""; // This will never show in essential version
     const emptyOnlyStatus = fillEmptyOnly ? "<br>- Only Empty Inputs Filled" : "";
     const maxTotalStatus = useMaxTotal && maxTotalHit ? `<br>- Max Total Limit (${maxTotalAmount}) Reached` : '';
 
@@ -883,18 +893,18 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
 
      // Use sanitize for feedback HTML to prevent basic HTML injection
      // Assumes sanitize function is available
-     const sanitizedSummaryHtml = sanitize(summaryHtml);
+     const sanitizedSummaryHtml = typeof sanitize === 'function' ? sanitize(summaryHtml) : summaryHtml;
 
 
      GM_log(`Pack Filler Pro: Fill complete. ${summaryHtml.replace(/<br>- /g, '; ').replace(/<.*?>/g, '').replace(/\n/g, ' ')}`);
 
 
-     if (isAutoFill) {
-         // Use a toast for auto-fill, less intrusive
-         SWAL_TOAST(sanitize(`Auto-filled ${filledCount} packs (Total: ${totalCopiesAdded})`), 'success', config); // Sanitize toast title
-     } else {
-         // Use a modal for manual fills
+     // isAutoFill is always false in this essential version, so always use modal if filledCount > 0
+     if (filledCount > 0) {
          SWAL_ALERT('Fill Summary', sanitizedSummaryHtml, 'success', config); // Use sanitized HTML
+     } else {
+          // If filledCount is 0, feedback was already handled earlier.
+          GM_log("Pack Filler Pro: No packs filled, skipping feedback display.");
      }
 }
 
@@ -941,7 +951,8 @@ function virtualUpdate(inputs, quantities) {
 // - generateFeedback
 // - virtualUpdate
 // - calculateQuantitiesMainThread
+// - MainThreadFillStrategies (object containing the strategy functions)
 
-// Note: chooseQuantity, lerp, perlinNoise, generateSeed, MainThreadFillStrategies
+// Note: chooseQuantity, lerp, perlinNoise, generateSeed
 // are internal helpers/variables and are not explicitly exported,
 // but are accessible within this file's scope.
