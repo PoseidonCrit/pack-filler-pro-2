@@ -187,6 +187,7 @@ const MainThreadFillStrategies = {
 
 
 // Determines the actual number of packs to fill based on mode and available inputs.
+// Moved this function definition directly before fillPacks to ensure scope availability.
 function calculateFillCount(config, availableCount) {
     // Use config object directly
     const { lastMode: mode, lastCount: count } = config;
@@ -197,20 +198,6 @@ function calculateFillCount(config, availableCount) {
         // Clamp count to available inputs, but not less than 0
         return clamp(count, 0, availableCount);
     }
-}
-
-// Determines the target inputs based on all available inputs and config.
-// This is primarily used by fillPacks.
-function determineTargetInputs(allInputs, config) {
-    // Defensive check: Ensure calculateFillCount is defined before calling it
-    if (typeof calculateFillCount === 'undefined') {
-        const errorMsg = "Pack Filler Pro Error: calculateFillCount is not defined in determineTargetInputs. Check @require order.";
-        GM_log(errorMsg);
-        // Throwing here will be caught by the fillPacks catch block
-        throw new ReferenceError("calculateFillCount is not defined");
-    }
-    const fillCount = calculateFillCount(config, allInputs.length);
-    return allInputs.slice(0, fillCount);
 }
 
 
@@ -243,7 +230,8 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
         if (availablePacks === 0) {
              GM_log("Pack Filler Pro: fillPacks Step 6: No visible pack inputs found."); // Debugging log
-             if (!isAutoFill) SWAL_ALERT('Fill Packs', 'No visible pack inputs found on the page.', 'warning', config); // Pass config to SWAL
+             // Pass config to SWAL_ALERT
+             if (!isAutoFill) SWAL_ALERT('Fill Packs', 'No visible pack inputs found on the page.', 'warning', config);
              GM_log("Fill operation aborted: No visible pack inputs found.");
              return;
         }
@@ -254,13 +242,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
          if (mode === 'unlimited') {
               potentialInputsToFill = allInputs; // All visible
          } else {
-               // THIS IS LINE 606 IN THE CONCATENATED SCRIPT WHERE THE ERROR OCCURS
-               // Defensive check: Ensure calculateFillCount is defined before calling it
-               if (typeof calculateFillCount === 'undefined') {
-                   const errorMsg = "Pack Filler Pro Error: calculateFillCount is not defined in fillPacks. Check @require order.";
-                   GM_log(errorMsg);
-                   throw new ReferenceError("calculateFillCount is not defined");
-               }
+               // Call calculateFillCount - now guaranteed to be defined in this scope
                const fillCount = calculateFillCount(config, availablePacks); // Pass config
               potentialInputsToFill = allInputs.slice(0, fillCount);
          }
@@ -270,7 +252,8 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
         if (targetedCount === 0) {
              GM_log("Pack Filler Pro: fillPacks Step 9: No packs targeted."); // Debugging log
-             if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs targeted based on current mode (${mode}) and count (${count}).`, 'info', config); // Pass config to SWAL
+             // Pass config to SWAL_ALERT
+             if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs targeted based on current mode (${mode}) and count (${count}).`, 'info', config);
              GM_log(`Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
              return;
         }
@@ -302,13 +285,15 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
              const message = fillEmptyOnly
                  ? `No empty packs found among the ${targetedCount} targeted.`
                  : `All ${targetedCount} targeted packs already have a quantity.`;
-             if (!isAutoFill) SWAL_ALERT('Fill Packs', message, 'info', config); // Pass config to SWAL
+             // Pass config to SWAL_ALERT
+             if (!isAutoFill) SWAL_ALERT('Fill Packs', message, 'info', config);
              GM_log(`Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, Filled: ${filledCount}`);
              return;
         } else if (filledCount === 0 && targetedCount === 0) {
              GM_log("Pack Filler Pro: fillPacks Step 15: No packs targeted or matched criteria."); // Debugging log
              // This case is already handled above, but defensive check
-             if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs matched criteria to fill.`, 'info', config); // Pass config to SWAL
+             // Pass config to SWAL_ALERT
+             if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs matched criteria to fill.`, 'info', config);
               GM_log(`Fill operation aborted: No packs matched criteria.`);
              return;
         }
@@ -418,6 +403,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
             GM_log("Pack Filler Pro: fillPacks Step 23: Quantities applied via virtualUpdate."); // Debugging log
         } else {
              GM_log("Pack Filler Pro: fillPacks Step 22a: No quantities generated to apply."); // Debugging log
+             // Pass config to SWAL_ALERT
              if (!isAutoFill) SWAL_ALERT('Fill Packs', 'Calculation failed. No quantities generated.', 'error', config);
              return; // Abort if no quantities were generated
         }
@@ -434,6 +420,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
      } catch (error) {
          GM_log(`Pack Filler Pro: fillPacks Step Error: Caught an error during fill process: ${error.message}`, error); // Debugging log
+         // Pass config to SWAL_ALERT
          if (!isAutoFill) SWAL_ALERT('Fill Error', sanitize(error.message), 'error', config);
      }
      GM_log("Pack Filler Pro: fillPacks finished."); // Debugging log
@@ -658,6 +645,5 @@ function virtualUpdate(inputs, quantities) {
 
 
 // The functions sanitize, validateFillConfig, callWorkerAsync, chooseQuantity,
-// MainThreadFillStrategies, getFillStrategy (implicitly via MainThreadFillStrategies),
-// calculateFillCount, determineTargetInputs, fillPacks, fillRandomPackInput,
+// MainThreadFillStrategies, calculateFillCount, fillPacks, fillRandomPackInput,
 // generateFeedback, and virtualUpdate are made available to the main script's scope via @require.
