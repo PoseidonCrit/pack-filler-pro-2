@@ -202,6 +202,13 @@ function calculateFillCount(config, availableCount) {
 // Determines the target inputs based on all available inputs and config.
 // This is primarily used by fillPacks.
 function determineTargetInputs(allInputs, config) {
+    // Defensive check: Ensure calculateFillCount is defined before calling it
+    if (typeof calculateFillCount === 'undefined') {
+        const errorMsg = "Pack Filler Pro Error: calculateFillCount is not defined in determineTargetInputs. Check @require order.";
+        GM_log(errorMsg);
+        // Throwing here will be caught by the fillPacks catch block
+        throw new ReferenceError("calculateFillCount is not defined");
+    }
     const fillCount = calculateFillCount(config, allInputs.length);
     return allInputs.slice(0, fillCount);
 }
@@ -248,6 +255,12 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
               potentialInputsToFill = allInputs; // All visible
          } else {
                // THIS IS LINE 606 IN THE CONCATENATED SCRIPT WHERE THE ERROR OCCURS
+               // Defensive check: Ensure calculateFillCount is defined before calling it
+               if (typeof calculateFillCount === 'undefined') {
+                   const errorMsg = "Pack Filler Pro Error: calculateFillCount is not defined in fillPacks. Check @require order.";
+                   GM_log(errorMsg);
+                   throw new ReferenceError("calculateFillCount is not defined");
+               }
                const fillCount = calculateFillCount(config, availablePacks); // Pass config
               potentialInputsToFill = allInputs.slice(0, fillCount);
          }
