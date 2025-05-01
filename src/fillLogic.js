@@ -265,14 +265,14 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     let currentTotal = 0; // Track total added in this fill operation
     let maxTotalHit = false;
 
-    // Declare strategy outside the try block and initialize it
-    let strategy = getFillStrategy(config, false); // Initialize with the intended strategy
-
+    // Declare strategy outside the try block and initialize it with the default random strategy
+    let strategy = FillStrategies.random; // Initialize strategy with a default
 
     // --- Core Filling Logic ---
     // Determine quantities based on pattern or mode
     if (patternType && patternType !== 'random') {
          // Use pattern strategy (potentially offloaded to worker)
+         strategy = getFillStrategy(config, false); // Get the intended strategy
          const totalPacksToFill = inputsToActuallyFill.length;
 
          // Check if we should use the worker for heavy patterns (like Perlin) AND worker is available
@@ -356,6 +356,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     } else {
          // Use existing mode logic (fixed, random range, unlimited fixed)
          GM_log(`Pack Filler Pro: Using standard fill mode (${mode}).`);
+         // strategy is already initialized with random, which is correct for this block
          inputsToActuallyFill.forEach(input => {
              let qty = chooseQuantity(config);
 
