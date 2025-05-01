@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         🎴F105.35 Pack Filler Pro – Sleek Edition
+// @name         🎴F105.35 Pack Filler Pro – Sleek Edition (Main Thread Only)
 // @namespace    https://ygoprodeck.com
 // @version      🎴F105.35
-// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns.
+// @description  Enhanced UI and options for YGOPRODeck Pack Simulator, automatically loads all packs on load via scrolling, with advanced fill patterns (all calculations on main thread).
 // @match        https://ygoprodeck.com/pack-sim/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -42,11 +42,11 @@
 // Configuration loading/saving (depends on constants, GM functions)
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/configManager.js
 
-// Web Worker code string (used by fillLogic)
-// @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/patternWorker.js
+// NOTE: patternWorker.js is NOT required in this version as worker is not used.
 
-// Core filling logic (depends on domUtils, swalHelpers, patternWorker, constants, configManager, GM functions)
+// Core filling logic (depends on domUtils, swalHelpers, constants, configManager, GM functions)
 // This file needs to be loaded before pageLoader and uiManager which call its functions.
+// THIS VERSION RUNS ALL PATTERN CALCULATIONS ON THE MAIN THREAD.
 // @require      https://raw.githubusercontent.com/PoseidonCrit/pack-filler-pro-2/refs/heads/main/src/fillLogic.js
 
 // Page loading/scrolling logic (depends on domUtils, fillLogic, swalHelpers, constants, cash-dom, GM functions)
@@ -79,13 +79,13 @@
     let panelElement; // Reference to the main UI panel element
     let toggleButtonElement; // Reference to the panel toggle button element
     let panelSimpleBarInstance = null; // SimpleBar instance for the panel body (if used)
-    let patternWorker = null; // Web Worker instance for pattern calculations
+    // let patternWorker = null; // Web Worker instance - NOT USED IN THIS VERSION
 
 
     /* --- Initialize Script --- */
     // This function orchestrates the startup of the script.
     function init() {
-        GM_log(`Pack Filler Pro v${GM_info.script.version}: Initialization started.`);
+        GM_log(`Pack Filler Pro v${GM_info.script.version} (Main Thread Only): Initialization started.`);
 
         // 1. Essential Dependency Checks (Libraries)
         // Check if critical external libraries loaded correctly via @require.
@@ -103,70 +103,8 @@
          }
         GM_log("Pack Filler Pro: Essential libraries (cash-dom, SweetAlert2) found.");
 
-        // 2. Initialize Web Worker
-        // Check if the Worker class is available and if the worker code string ('workerCode' from patternWorker.js) is available.
-        // The workerCode variable is exposed by Tampermonkey/Violentmonkey from the @require'd file.
-        if (typeof Worker !== 'undefined' && typeof workerCode !== 'undefined' && workerCode) {
-            try {
-                // Create a Blob from the worker code string and get a URL for it.
-                const blob = new Blob([workerCode], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                patternWorker = new Worker(blobUrl);
-                GM_log("Pack Filler Pro: Web Worker initialized successfully.");
-
-                // Set up the message handler for the worker.
-                // This handler is responsible for processing messages from the worker,
-                // including results ('result'), errors ('error'), and logs ('log').
-                // It interacts with the _pendingWorkerRequests map managed in fillLogic.js.
-                // Assumes handleWorkerMessage is available from fillLogic.js.
-                if (typeof handleWorkerMessage === 'function') {
-                     patternWorker.onmessage = handleWorkerMessage;
-                     GM_log("Pack Filler Pro: Web Worker message handler (handleWorkerMessage) attached.");
-                } else {
-                     GM_log("Pack Filler Pro: handleWorkerMessage function not found. Worker messages will not be fully processed.");
-                     // Basic logging fallback if the handler is missing
-                     patternWorker.onmessage = (e) => { GM_log("Pack Filler Pro Worker Message (handler missing):", e.data); };
-                }
-
-
-                // Handle critical worker errors that prevent it from starting or running.
-                patternWorker.onerror = (error) => {
-                     GM_log("Pack Filler Pro: Web Worker failed or encountered a critical error:", error);
-                     // Inform the user via a toast if Swal is available and config is loaded
-                     // Use a small delay to ensure config and Swal are likely ready.
-                     setTimeout(() => {
-                         if(typeof SWAL_TOAST !== 'undefined' && config) {
-                              SWAL_TOAST('Pattern Worker Error: Pattern features may be disabled.', 'error', config);
-                         } else {
-                              GM_log('Pack Filler Pro: Pattern Worker Error - Pattern features may be disabled.');
-                         }
-                     }, 100); // 100ms delay
-
-                     // Terminate the worker on critical error to prevent further issues
-                     if (patternWorker) {
-                          patternWorker.terminate();
-                          patternWorker = null; // Ensure the reference is null
-                          GM_log("Pack Filler Pro: Web Worker terminated due to error.");
-                     }
-                };
-
-            } catch (e) {
-                GM_log("Pack Filler Pro: Failed to initialize Web Worker.", e);
-                patternWorker = null; // Ensure worker is null if initialization fails
-                 // Inform the user via a toast if Swal is available and config is loaded
-                 setTimeout(() => {
-                     if(typeof SWAL_TOAST !== 'undefined' && config) {
-                          SWAL_TOAST('Pattern Worker Init Failed: Pattern features may be disabled.', 'error', config);
-                     } else {
-                          GM_log('Pack Filler Pro: Pattern Worker Init Failed - Pattern features may be disabled.');
-                     }
-                 }, 100); // 100ms delay
-            }
-        } else {
-            GM_log("Pack Filler Pro: Web Worker API or workerCode not available. Pattern features will run on main thread or fallback.");
-            patternWorker = null; // Ensure worker is null if not supported/loaded
-        }
-
+        // 2. Initialize Web Worker - SKIPPED IN THIS VERSION
+        // The patternWorker is not used.
 
         // 3. Load Configuration
         // Calls the loadConfig function from src/configManager.js
@@ -332,7 +270,7 @@
              }
         }
 
-        GM_log("Pack Filler Pro: Initialization complete.");
+        GM_log("Pack Filler Pro: Initialization complete (Main Thread Only).");
     }
 
 
@@ -345,13 +283,9 @@
         setTimeout(init, 0);
     });
 
-    // Clean up the worker when the script is unloaded (e.g., page navigation)
-    // Also disconnect MutationObservers stored globally.
+    // Clean up resources when the script is unloaded (e.g., page navigation)
+    // Disconnect MutationObservers stored globally.
     window.addEventListener('beforeunload', () => {
-        if (patternWorker) {
-            patternWorker.terminate();
-            GM_log("Pack Filler Pro: Web Worker terminated on unload.");
-        }
          // Disconnect MutationObservers if they are stored globally on window
          // (The swal observer is stored on window._pfpSwalObserver in uiManager.js)
          if (window._pfpSwalObserver) {
@@ -366,7 +300,7 @@
     // Optional: Add a menu command for manual initialization if DOMContentLoaded fails for some reason
     // This provides a fallback way to start the script.
     if (typeof GM_registerMenuCommand !== 'undefined') {
-         GM_registerMenuCommand("Pack Filler Pro: Manual Init", init);
+         GM_registerMenuCommand("Pack Filler Pro: Manual Init (Main Thread Only)", init);
          GM_log("Pack Filler Pro: Registered manual initialization menu command.");
     } else {
          GM_log("Pack Filler Pro: GM_registerMenuCommand not available. Manual init command not registered.");
