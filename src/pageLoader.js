@@ -3,9 +3,9 @@
 // and relies on browser window/document properties.
 
 // It assumes the following are available in the main script's scope via @require:
-// - functions from domUtils.js (getPackInputs, $, clamp)
+// - functions from domUtils.js (getPackInputs, $)
 // - functions from fillLogic.js (fillPacks)
-// - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT, sanitize)
+// - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT)
 // - constants from constants.js (SELECTOR, SCROLL_TO_BOTTOM_CHECKBOX_ID etc.)
 // - GM_log function
 
@@ -15,155 +15,178 @@
  * Scrolls the page to load all packs if enabled in the config.
  * Uses scroll polling to detect new content.
  * Provides user feedback via SweetAlert2 toasts.
- * Assumes getPackInputs, fillPacks, SWAL_TOAST, SWAL_ALERT, sanitize, $ from cash-dom, SELECTOR,
- * SCROLL_TO_BOTTOM_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, clamp, and GM_log are available.
+ * Assumes getPackInputs, fillPacks, SWAL_TOAST, SWAL_ALERT, $ from cash-dom, SELECTOR,
+ * SCROLL_TO_BOTTOM_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, and GM_log are available.
  * @param {object} config - The script's configuration object.
  */
 async function loadFullPageIfNeeded(config) {
     GM_log("Pack Filler Pro: loadFullPageIfNeeded function entered.");
 
-    // Check critical dependencies before starting
-    if (typeof getPackInputs !== 'function' || typeof $ === 'undefined' || typeof SELECTOR === 'undefined' || typeof clamp !== 'function' || typeof SWAL_ALERT === 'undefined' || typeof SWAL_TOAST === 'undefined' || typeof sanitize === 'function') {
-         const errorMessage = "loadFullPageIfNeeded critical dependencies missing. Auto-loading aborted.";
-         GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-          // Use fallback alert if SWAL or sanitize is missing
-          const fallbackMsg = `Pack Filler Pro Error: ${errorMessage}. Check script installation or dependencies.`;
-          if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Auto-Load Error', sanitize(errorMessage), 'error', config);
-          else alert(fallbackMsg);
-         return; // Abort if critical dependencies are missing
-    }
-
     // Basic validation of config object
     if (typeof config !== 'object' || config === null) {
-         const msg = "Invalid config object passed to loadFullPageIfNeeded. Aborting auto-load.";
-         GM_log(`Pack Filler Pro: ERROR - ${msg}`);
-         SWAL_ALERT('Auto-Load Error', sanitize(msg), 'error', config);
+         GM_log("Pack Filler Pro: Invalid config object passed to loadFullPageIfNeeded. Aborting.");
+         // Cannot use Swal without config, fallback to alert
+         if (typeof SWAL_ALERT === 'function') {
+             // Assumes sanitize is available
+             if (typeof sanitize === 'function') SWAL_ALERT('Auto-Load Error', sanitize('Invalid configuration. Auto-loading aborted.'), 'error', null);
+             else SWAL_ALERT('Auto-Load Error', 'Invalid configuration. Auto-loading aborted.', 'error', null); // Fallback if sanitize missing
+         } else {
+              alert('Pack Filler Pro Error: Invalid configuration. Auto-loading aborted.');
+         }
          return;
     }
 
-
-    // Check if auto-load is enabled in the configuration
+    // Check if auto-load is enabled in the config
     if (!config.loadFullPage) {
-         GM_log("Pack Filler Pro: Auto-load full page is disabled in config.");
-         // Ensure max count for input is updated based on initially visible if not auto-loading
-         // Assumes getPackInputs, $, and clamp are available (already checked above)
-         const maxCount = getPackInputs().length;
-         // Ensure the max attribute is set but not less than 0
-         $('#pfp-count').attr('max', clamp(maxCount, 0, Infinity)); // Assumes $ is cash-dom
-         GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
-         return; // Exit if auto-load is disabled
+        GM_log("Pack Filler Pro: Auto-load is disabled in config. Exiting loadFullPageIfNeeded.");
+         // If not auto-loading, ensure the max count for the count input is set based on initially visible inputs
+         // Uses $ from cash-dom and getPackInputs from src/domUtils.js
+         // Assumes getPackInputs, $, and clamp are available
+         if (typeof $ === 'function' && typeof getPackInputs === 'function' && typeof clamp === 'function') {
+              const maxCount = getPackInputs().length;
+              $(`#${COUNT_INPUT_ID}`).attr('max', clamp(maxCount, 0, Infinity));
+              GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs (auto-load disabled).");
+         } else {
+              GM_log("Pack Filler Pro: Dependencies for setting max count missing (getPackInputs, $, clamp). Skipping.");
+         }
+        return;
     }
 
-    GM_log("Pack Filler Pro: Auto-load full page is enabled. Starting scroll process...");
-
-    const scrollDelay = 300; // ms to wait after each scroll
-    const scrollCheckIterations = 20; // Number of times to check for height/input change after a scroll
-    const scrollCheckInterval = 100; // ms between height/input checks
-    const maxScrollAttempts = 150; // Safety break to prevent infinite loops
-
-    // Check if fillPacks is available if auto-fill is enabled
-    if (config.autoFillLoaded && typeof fillPacks !== 'function') {
-         const errorMessage = "fillPacks function not found, but auto-fill loaded is enabled. Auto-fill will be skipped.";
-         GM_log(`Pack Filler Pro: WARNING - ${errorMessage}`);
-         SWAL_TOAST('Auto-Fill Warning', sanitize(errorMessage), 'warning', config);
-    }
+    GM_log("Pack Filler Pro: Auto-load is enabled. Starting page loading process.");
 
 
-    let lastHeight = 0;
-    let currentHeight = document.body.scrollHeight;
-    let scrollAttempts = 0;
+    // Check essential dependencies for page loading
+     if (typeof getPackInputs !== 'function' || typeof $ === 'undefined' || typeof SELECTOR === 'undefined') {
+          const errorMessage = "Page loading dependencies (getPackInputs, $, SELECTOR) missing. Auto-loading aborted.";
+          GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
+          // Use SWAL_ALERT if available, assumes sanitize is available
+          if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Auto-Load Error', sanitize(errorMessage), 'error', config);
+          else alert(`Pack Filler Pro Error: ${errorMessage}`);
+          return; // Abort if critical dependencies are missing
+     }
+
+    // Get initial state
     const initialInputCount = getPackInputs().length;
+    let lastHeight = document.body.scrollHeight;
+    let currentInputCount = initialInputCount;
+    let scrollAttempts = 0;
+    const maxScrollAttempts = 50; // Limit scroll attempts to prevent infinite loops
+    const scrollStep = window.innerHeight * 0.8; // Scroll by 80% of viewport height
+    const pollInterval = 100; // Milliseconds to wait between polls after a scroll
+    const pollDuration = 1000; // Total milliseconds to poll after a scroll
+    const smoothScroll = config.scrollToBottomAfterLoad; // Use config for smooth scroll option
 
-    GM_log(`Pack Filler Pro: Starting auto-load. Initial height: ${currentHeight}, Initial Inputs: ${initialInputCount}.`);
-
-    // Initial short wait for page elements to render before the first scroll/check
-    await new Promise(resolve => setTimeout(resolve, 500));
-    currentHeight = document.body.scrollHeight; // Update height after initial wait
-
-    while (scrollAttempts < maxScrollAttempts) {
-         lastHeight = currentHeight;
-
-         // Scroll to the bottom of the page. Use smooth scrolling if enabled in config.
-         window.scrollTo({ top: document.body.scrollHeight, behavior: config.scrollToBottomAfterLoad ? 'smooth' : 'auto' });
+    GM_log(`Pack Filler Pro: Starting auto-load scroll polling. Initial inputs: ${initialInputCount}`);
+     if (typeof SWAL_TOAST === 'function') {
+          // Assumes sanitize is available
+          if (typeof sanitize === 'function') SWAL_TOAST(sanitize(`Starting auto-load... Found ${initialInputCount} packs.`), 'info', config);
+          else SWAL_TOAST(`Starting auto-load... Found ${initialInputCount} packs.`, 'info', config); // Fallback if sanitize missing
+     } else {
+          GM_log("Pack Filler Pro: SWAL_TOAST function not found for auto-load start feedback.");
+     }
 
 
-         let contentIncreased = false;
-         let currentInputCount = getPackInputs().length; // Get input count after scrolling
-         // Wait and check height/input count multiple times as new content might load in chunks
-         for(let i = 0; i < scrollCheckIterations; i++) {
-              await new Promise(resolve => setTimeout(resolve, scrollCheckInterval));
-              const newHeight = document.body.scrollHeight;
-              const newInputCount = getPackInputs().length;
+    // Use a Promise to manage the async scrolling loop
+    await new Promise(resolve => {
+        const scrollAndPoll = () => {
+            scrollAttempts++;
+            // GM_log(`Pack Filler Pro: Scroll attempt ${scrollAttempts}/${maxScrollAttempts}.`); // Too chatty
 
-              // Check if either height or the number of inputs has increased
-              if (newHeight > currentHeight || newInputCount > currentInputCount) {
-                   // GM_log(`Pack Filler Pro: Polling detected content increase (Height: ${newHeight}, Inputs: ${newInputCount}) in scroll attempt ${scrollAttempts}, check ${i}.`); // Too chatty
-                   currentHeight = newHeight; // Update current height
-                   currentInputCount = newInputCount; // Update current input count
-                   contentIncreased = true;
+            // Scroll down the page
+            window.scrollBy({
+                top: scrollStep, // Scroll down by step amount
+                behavior: smoothScroll ? 'smooth' : 'auto' // Use smooth behavior if enabled
+            });
 
-                   // Break the inner loop as soon as an increase is detected
-                   break;
-              }
-         }
+            // Poll for new content after scrolling
+            let pollTime = 0;
+            const poll = () => {
+                const newHeight = document.body.scrollHeight;
+                const newInputCount = getPackInputs().length; // Get count of visible inputs
 
-         scrollAttempts++;
+                // GM_log(`Pack Filler Pro: Polling... Height: ${newHeight}, Inputs: ${newInputCount}`); // Too chatty
 
-         // Break the main loop if content (height or input count) hasn't increased after checks
-         if (!contentIncreased) {
-             GM_log(`Pack Filler Pro: Polling: Page height and input count did not increase after ${scrollCheckIterations} checks in scroll attempt ${scrollAttempts}. Final height: ${currentHeight}, Final Inputs: ${currentInputCount}. Stopping scroll.`);
-             break; // Stop the main while loop
-         }
+                // Check if height increased OR input count increased
+                if (newHeight > lastHeight || newInputCount > currentInputCount) {
+                    lastHeight = newHeight;
+                    currentInputCount = newInputCount;
+                    scrollAttempts = 0; // Reset scroll attempts if new content is found
+                    // GM_log(`Pack Filler Pro: New content detected. Total inputs now: ${currentInputCount}. Resetting scroll attempts.`); // Too chatty
+                    // Continue polling briefly to catch subsequent loads
+                    if (pollTime < pollDuration) {
+                         pollTime += pollInterval;
+                         setTimeout(poll, pollInterval);
+                    } else {
+                         // Finished polling after detecting new content, scroll again
+                         setTimeout(scrollAndPoll, 50); // Small delay before next scroll
+                    }
+                } else {
+                    // No new content detected during this poll interval
+                    pollTime += pollInterval;
+                    if (pollTime < pollDuration) {
+                        // Continue polling if poll duration not reached
+                        setTimeout(poll, pollInterval);
+                    } else {
+                        // Finished polling, no new content detected after scroll
+                        // Check if max scroll attempts reached or if we're already at the bottom
+                        const atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight;
+                        if (scrollAttempts >= maxScrollAttempts || atBottom) {
+                            GM_log(`Pack Filler Pro: Auto-load finished. Max attempts reached (${maxScrollAttempts}) or reached bottom.`);
+                            resolve(); // Resolve the promise to exit the loop
+                        } else {
+                            // Not at bottom and attempts remaining, scroll again
+                            setTimeout(scrollAndPoll, 50); // Small delay before next scroll
+                        }
+                    }
+                }
+            };
 
-         // Check for a Load More button as an alternative end condition
-         // '.load-more-btn' class might indicate an explicit load button exists on the page.
-         // If it's present but no longer visible or is disabled, assume end of content.
-          const loadMoreButton = document.querySelector('.load-more-btn');
-          if (loadMoreButton && (!loadMoreButton.offsetParent || loadMoreButton.disabled)) {
-              GM_log("Pack Filler Pro: Load More button is now hidden or disabled. Assuming end of content.");
-              break;
-          }
+            // Start polling after a short delay to allow content to render
+            setTimeout(poll, 300); // Initial delay after scroll
+        };
 
-         // Add a general delay between scrolls if content did increase
-         await new Promise(resolve => setTimeout(resolve, scrollDelay));
-    }
+        // Start the first scroll and poll sequence
+        scrollAndPoll();
+    });
 
-    if (scrollAttempts >= maxScrollAttempts) {
-        GM_log(`Pack Filler Pro: Polling reached max scroll attempts (${maxScrollAttempts}). Stopping auto-load.`);
-    }
-
-    // Trigger auto-fill if enabled AFTER loading is complete and if fillPacks is available
+    // --- Auto-load finished ---
     const finalInputCount = getPackInputs().length;
-    GM_log(`Pack Filler Pro: Full page auto-load process finished. Final visible input count after load: ${finalInputCount}.`);
+    GM_log(`Pack Filler Pro: Auto-load process complete. Final visible inputs: ${finalInputCount}.`);
 
-    // Update the max attribute for the count input based on the total loaded inputs
-     // Assumes getPackInputs, $, and clamp are available (already checked above)
-     $('#pfp-count').attr('max', clamp(finalInputCount, 0, Infinity)); // Assumes $ is cash-dom
-     GM_log(`Pack Filler Pro: Max count for input updated to ${finalInputCount} after auto-load.`);
+    // Update the max value for the count input based on the final visible inputs
+     // Assumes $ from cash-dom and getPackInputs from src/domUtils.js are available
+     // Assumes clamp is available
+     if (typeof $ === 'function' && typeof getPackInputs === 'function' && typeof clamp === 'function') {
+          $(`#${COUNT_INPUT_ID}`).attr('max', clamp(finalInputCount, 0, Infinity));
+          GM_log("Pack Filler Pro: Max count for input set based on final visible inputs.");
+     } else {
+          GM_log("Pack Filler Pro: Dependencies for setting max count missing (getPackInputs, $, clamp). Skipping.");
+     }
 
 
-    // Only trigger auto-fill if enabled, if fillPacks function exists, and if any inputs were found (either initially or after loading)
+    // Trigger auto-fill if enabled and fillPacks function is available
+    // Assumes fillPacks function from fillLogic.js is available
     if (config.autoFillLoaded && typeof fillPacks === 'function' && finalInputCount > 0) {
-        GM_log(`Pack Filler Pro: Auto-fill loaded enabled. Triggering fillPacks for ${finalInputCount} inputs.`);
-        // Small delay before filling to ensure inputs are fully rendered/interactive
-        setTimeout(() => {
-            fillPacks(config, true); // Pass config and isAutoFill=true
-        }, 100); // 100ms delay
+        GM_log(`Pack Filler Pro: Auto-fill loaded packs is enabled. Triggering fillPacks for ${finalInputCount} inputs.`);
+         // Use a short delay before triggering fillPacks to allow UI to settle
+        setTimeout(() => fillPacks(config, true), 50); // Pass config and isAutoFill=true
 
     } else {
         GM_log("Pack Filler Pro: Auto-fill loaded is disabled, fillPacks function not found, or no inputs were found. Auto-fill skipped.");
         // Optional: Show a final toast message if auto-fill didn't run
-         if (typeof SWAL_TOAST === 'function') { // Ensure SWAL_TOAST is available
+         if (typeof SWAL_TOAST === 'function') {
+              // Assumes sanitize is available
+              const sanitizeFn = typeof sanitize === 'function' ? sanitize : (text) => text; // Use sanitize if available, otherwise identity
               if (finalInputCount > initialInputCount) {
-                   SWAL_TOAST(sanitize(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`), 'success', config); // Sanitize message
+                   SWAL_TOAST(sanitizeFn(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`), 'success', config); // Pass config to SWAL
               } else if (initialInputCount > 0) {
-                   SWAL_TOAST(sanitize(`Auto-load finished. Found ${initialInputCount} packs initially.`), 'info', config); // Sanitize message
+                   SWAL_TOAST(sanitizeFn(`Auto-load finished. Found ${initialInputCount} packs initially.`), 'info', config); // Pass config to SWAL
               } else {
                    // Check if any inputs exist at all (even hidden ones) using the selector
                    if ($(SELECTOR).length === 0) {
-                        SWAL_TOAST(sanitize('No pack inputs found on the page.'), 'info', config); // Sanitize message
+                        SWAL_TOAST(sanitizeFn('No pack inputs found on the page.'), 'info', config); // Pass config to SWAL
                    } else {
-                        SWAL_TOAST(sanitize("Auto-load finished. Found packs."), 'info', config); // Sanitize message
+                        SWAL_TOAST(sanitizeFn("Auto-load finished. Found packs."), 'info', config); // Pass config to SWAL
                    }
               }
          } else {
