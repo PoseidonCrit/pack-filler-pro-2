@@ -36,6 +36,10 @@ function bindPanelEvents(config) { // Accept config here
         // Ensure config is updated from UI before filling
         updateConfigFromUI(config); // Pass config
         debouncedSaveConfig(config); // Save config immediately on manual trigger
+
+        // --- Add Debugging Log Here ---
+        GM_log("Pack Filler Pro: About to call fillPacks with config:", config); // Debugging log
+
         await fillPacks(config); // Pass config and await the async fillPacks
     });
 
@@ -430,5 +434,5 @@ function applyDarkMode(config, enable) { // Accept config here
 
 
 // The functions updatePanelModeDisplay, updatePanelVisibility, loadConfigIntoUI,
-// updateConfigFromUI, updatePatternParamsDisplay, applyDarkMode, and triggerPageRandomButton
-// are made available to the main script's scope via @require.
+// updateConfigFromUI, updatePatternParamsDisplay, and applyDarkMode are made available
+// to the main script's scope via @require.
