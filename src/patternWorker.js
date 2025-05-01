@@ -1,3 +1,15 @@
+/*
+// This file is NOT USED in the main-thread-only version of the script.
+// All calculation logic has been moved to fillLogic.js.
+
+// Keeping this file here just as a marker that it was part of the original
+// worker-based implementation. It will not be @require'd in the main script header.
+
+// const workerCode = `...`; // Worker code string removed
+// export const workerCode = workerCode; // Export removed
+
+
+
 // This file contains the code for the Web Worker as a string.
 // It will be used by the main script to create a Blob URL for the worker.
 
@@ -254,6 +266,9 @@ self.onmessage = function(e) {
             error = { message: e.message, stack: e.stack };
             self.postMessage({ type: 'log', data: [\`Pack Filler Pro Worker: Calculation error: \${error.message}\`, error] });
             // Send an error response back to the main script
+
+
+*/
             self.postMessage({ type: 'error', requestId: requestId, error: error });
         }
     } else {
