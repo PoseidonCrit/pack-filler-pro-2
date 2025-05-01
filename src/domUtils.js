@@ -25,6 +25,7 @@ function getPackInputs() {
               GM_log("Pack Filler Pro: $(SELECTOR).get() did not return an array. Returning empty array.", inputs);
               return [];
          }
+        // Use offsetParent to check visibility - elements with offsetParent === null are hidden
         return inputs.filter(el => el instanceof HTMLInputElement && el.offsetParent !== null);
     } catch (e) {
          GM_log("Pack Filler Pro: Error getting pack inputs.", e);
@@ -121,14 +122,22 @@ function clearAllInputs() {
               if (typeof SWAL_ALERT === 'function') {
                  // Pass null for config here as clearAllInputs doesn't strictly need config for itself,
                  // but SWAL_ALERT might need it for dark mode.
-                  SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null);
+                  // Assumes sanitize is available
+                  if (typeof sanitize === 'function') {
+                      SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null);
+                  } else {
+                       GM_log("Pack Filler Pro: Sanitize function not found for clear feedback.");
+                       SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null); // Use unsanitized
+                  }
+
               } else {
                   GM_log("Pack Filler Pro: SWAL_ALERT function not found for clear feedback.");
               }
         } catch (e) {
              const msg = `Error clearing inputs: ${e.message}`;
              GM_log(`Pack Filler Pro: ERROR - ${msg}`, e);
-              if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Clear Error', sanitize(msg), 'error', null);
+              // Assumes SWAL_ALERT and sanitize are available
+              if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Clear Error', sanitize(msg), 'error', null);
               else alert(`Pack Filler Pro Error: ${msg}`);
         }
 
