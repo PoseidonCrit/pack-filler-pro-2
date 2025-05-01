@@ -146,5 +146,121 @@ const debouncedSaveConfig = (function() {
     };
 })();
 
-// The functions loadConfig, saveConfig, and debouncedSaveConfig are made available
+/**
+ * Validates key parts of the fill configuration to ensure quantities and pattern parameters are reasonable.
+ * Logs warnings if values are outside expected ranges or types.
+ * Assumes config object and GM_log are available.
+ * Assumes MAX_QTY constant is available.
+ * @param {object} config - The script's configuration object to validate.
+ * @throws {Error} Throws an error if a critical validation fails (e.g., min > max).
+ */
+function validateFillConfig(config) {
+    // Basic validation
+    if (typeof config !== 'object' || config === null) {
+        const errorMsg = "Validation failed: Invalid config object.";
+        GM_log(`Pack Filler Pro: ERROR - ${errorMsg}`, config);
+        throw new Error(errorMsg);
+    }
+
+    const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99; // Fallback MAX_QTY
+
+    // Validate quantity ranges
+    config.lastMinQty = clamp(config.lastMinQty, 0, maxQty);
+    config.lastMaxQty = clamp(config.lastMaxQty, 0, maxQty);
+    config.lastFixedQty = clamp(config.lastFixedQty, 0, maxQty);
+    config.maxTotalAmount = clamp(config.maxTotalAmount, 0, Infinity); // Max total can be very large or 0
+
+    if (config.lastMinQty > config.lastMaxQty) {
+        const warningMsg = `Validation warning: lastMinQty (${config.lastMinQty}) is greater than lastMaxQty (${config.lastMaxQty}). Setting lastMinQty = lastMaxQty.`;
+        GM_log(`Pack Filler Pro: WARNING - ${warningMsg}`);
+        config.lastMinQty = config.lastMaxQty; // Correct invalid range
+        // Note: We correct and warn, but don't throw, allowing the script to proceed
+    }
+
+    // Validate pattern parameters (basic clamping/defaulting)
+    if (typeof config.patternScale !== 'number' || isNaN(config.patternScale) || config.patternScale < 1) {
+        GM_log(`Pack Filler Pro: Validation warning: Invalid patternScale (${config.patternScale}). Setting to default ${DEFAULT_CONFIG.patternScale}.`);
+        config.patternScale = DEFAULT_CONFIG.patternScale;
+    } else {
+        config.patternScale = Math.max(1, Math.round(config.patternScale)); // Ensure integer >= 1
+    }
+
+     if (typeof config.patternIntensity !== 'number' || isNaN(config.patternIntensity) || config.patternIntensity < 0 || config.patternIntensity > 1) {
+         // Intensity is stored 0-1 in config, UI slider is 0-100
+         // Assumes conversion happens in UI update/config update
+         // This validation is for the stored config value (0.0 to 1.0)
+          GM_log(`Pack Filler Pro: Validation warning: Invalid patternIntensity (${config.patternIntensity}). Setting to default ${DEFAULT_CONFIG.patternIntensity}.`);
+          config.patternIntensity = DEFAULT_CONFIG.patternIntensity;
+     } else {
+          config.patternIntensity = clamp(config.patternIntensity, 0.0, 1.0); // Ensure it's between 0 and 1
+     }
+
+
+    // Validate patternType exists in main thread strategies
+     // Assumes MainThreadFillStrategies is defined in fillLogic.js and available in scope due to @require order
+     if (typeof MainThreadFillStrategies === 'object' && !MainThreadFillStrategies[config.patternType]) {
+         GM_log(`Pack Filler Pro: Validation warning: Unknown patternType "${config.patternType}". Setting to default "${DEFAULT_CONFIG.patternType}".`);
+         config.patternType = DEFAULT_CONFIG.patternType;
+     } else if (typeof MainThreadFillStrategies !== 'object') {
+          // If MainThreadFillStrategies isn't even available, a more critical error likely occurred earlier.
+          // The script might fail elsewhere, but log the warning here.
+          GM_log("Pack Filler Pro: Validation warning: MainThreadFillStrategies object not found. Cannot validate patternType.");
+     }
+
+    // Validate fillEmptyOnly is boolean
+    if (typeof config.fillEmptyOnly !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid fillEmptyOnly value (${config.fillEmptyOnly}). Setting to default ${DEFAULT_CONFIG.fillEmptyOnly}.`);
+         config.fillEmptyOnly = DEFAULT_CONFIG.fillEmptyOnly;
+    }
+
+    // Validate autoFillLoaded is boolean
+     if (typeof config.autoFillLoaded !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid autoFillLoaded value (${config.autoFillLoaded}). Setting to default ${DEFAULT_CONFIG.autoFillLoaded}.`);
+         config.autoFillLoaded = DEFAULT_CONFIG.autoFillLoaded;
+     }
+
+    // Validate scrollToBottomAfterLoad is boolean
+     if (typeof config.scrollToBottomAfterLoad !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid scrollToBottomAfterLoad value (${config.scrollToBottomAfterLoad}). Setting to default ${DEFAULT_CONFIG.scrollToBottomAfterLoad}.`);
+         config.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
+     }
+
+     // Validate loadFullPage is boolean
+      if (typeof config.loadFullPage !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid loadFullPage value (${config.loadFullPage}). Setting to default ${DEFAULT_CONFIG.loadFullPage}.`);
+         config.loadFullPage = DEFAULT_CONFIG.loadFullPage;
+      }
+
+    // Validate panelVisible is boolean
+     if (typeof config.panelVisible !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid panelVisible value (${config.panelVisible}). Setting to default ${DEFAULT_CONFIG.panelVisible}.`);
+         config.panelVisible = DEFAULT_CONFIG.panelVisible;
+     }
+
+    // Validate panelPos structure (basic check)
+     if (typeof config.panelPos !== 'object' || config.panelPos === null || typeof config.panelPos.top === 'undefined' || typeof config.panelPos.right === 'undefined' || typeof config.panelPos.bottom === 'undefined' || typeof config.panelPos.left === 'undefined') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid panelPos structure. Setting to default.`, config.panelPos);
+         config.panelPos = { ...DEFAULT_CONFIG.panelPos };
+     }
+
+    // Validate isDarkMode is boolean
+     if (typeof config.isDarkMode !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid isDarkMode value (${config.isDarkMode}). Setting to default ${DEFAULT_CONFIG.isDarkMode}.`);
+         config.isDarkMode = DEFAULT_CONFIG.isDarkMode;
+     }
+
+    // Validate clickPageRandomCount
+    if (typeof config.clickPageRandomCount !== 'number' || isNaN(config.clickPageRandomCount) || config.clickPageRandomCount < 1) {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid clickPageRandomCount value (${config.clickPageRandomCount}). Setting to minimum 1.`);
+         config.clickPageRandomCount = 1; // Ensure at least 1
+    } else {
+         config.clickPageRandomCount = Math.round(config.clickPageRandomCount); // Ensure integer
+    }
+
+
+    GM_log("Pack Filler Pro: Config validation complete.");
+}
+
+
+// The functions loadConfig, saveConfig, debouncedSaveConfig, and validateFillConfig are made available
 // to the main script's scope via @require.
