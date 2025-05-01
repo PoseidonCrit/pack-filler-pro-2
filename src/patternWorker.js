@@ -63,6 +63,8 @@ const WorkerFillStrategies = {
          return quantity;
      },
      // Add other heavy strategies here if needed in the future
+     // Note: Simple strategies like gradient/alternating could also be here for consistency,
+     // but they don't require the worker for performance.
 };
 
 
