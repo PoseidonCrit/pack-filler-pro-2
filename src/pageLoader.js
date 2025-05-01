@@ -5,7 +5,7 @@
 // It assumes the following are available in the main script's scope via @require:
 // - functions from domUtils.js (getPackInputs, $, clamp)
 // - functions from fillLogic.js (fillPacks)
-// - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT)
+// - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT, sanitize)
 // - constants from constants.js (SELECTOR, SCROLL_TO_BOTTOM_CHECKBOX_ID etc.)
 // - GM_log function
 
@@ -15,36 +15,42 @@
  * Scrolls the page to load all packs if enabled in the config.
  * Uses scroll polling to detect new content.
  * Provides user feedback via SweetAlert2 toasts.
- * Assumes getPackInputs, fillPacks, SWAL_TOAST, SWAL_ALERT, $ from cash-dom, SELECTOR,
- * SCROLL_TO_BOTTOM_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, and GM_log are available.
+ * Assumes getPackInputs, fillPacks, SWAL_TOAST, SWAL_ALERT, sanitize, $ from cash-dom, SELECTOR,
+ * SCROLL_TO_BOTTOM_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, clamp, and GM_log are available.
  * @param {object} config - The script's configuration object.
  */
 async function loadFullPageIfNeeded(config) {
     GM_log("Pack Filler Pro: loadFullPageIfNeeded function entered.");
 
+    // Check critical dependencies before starting
+    if (typeof getPackInputs !== 'function' || typeof $ === 'undefined' || typeof SELECTOR === 'undefined' || typeof clamp !== 'function' || typeof SWAL_ALERT === 'undefined' || typeof SWAL_TOAST === 'undefined' || typeof sanitize === 'function') {
+         const errorMessage = "loadFullPageIfNeeded critical dependencies missing. Auto-loading aborted.";
+         GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
+          // Use fallback alert if SWAL or sanitize is missing
+          const fallbackMsg = `Pack Filler Pro Error: ${errorMessage}. Check script installation or dependencies.`;
+          if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Auto-Load Error', sanitize(errorMessage), 'error', config);
+          else alert(fallbackMsg);
+         return; // Abort if critical dependencies are missing
+    }
+
     // Basic validation of config object
     if (typeof config !== 'object' || config === null) {
-         GM_log("Pack Filler Pro: Invalid config object passed to loadFullPageIfNeeded. Aborting.");
-         // Cannot use Swal without config, fallback to alert
-         alert('Pack Filler Pro Error: Invalid configuration. Auto-loading aborted.');
+         const msg = "Invalid config object passed to loadFullPageIfNeeded. Aborting auto-load.";
+         GM_log(`Pack Filler Pro: ERROR - ${msg}`);
+         SWAL_ALERT('Auto-Load Error', sanitize(msg), 'error', config);
          return;
     }
+
 
     // Check if auto-load is enabled in the configuration
     if (!config.loadFullPage) {
          GM_log("Pack Filler Pro: Auto-load full page is disabled in config.");
          // Ensure max count for input is updated based on initially visible if not auto-loading
-         // Assumes getPackInputs and $ are available
-         if (typeof getPackInputs === 'function' && typeof $ === 'function') {
-              // Use clamp from domUtils.js or define locally if needed
-              const clampFn = typeof clamp === 'function' ? clamp : (val, min, max) => Math.min(max, Math.max(min, val));
-              const maxCount = getPackInputs().length;
-              // Ensure the max attribute is set but not less than 0
-              $('#pfp-count').attr('max', clampFn(maxCount, 0, Infinity)); // Assumes $ is cash-dom
-              GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
-         } else {
-              GM_log("Pack Filler Pro: getPackInputs or $ function not found. Could not set max count.");
-         }
+         // Assumes getPackInputs, $, and clamp are available (already checked above)
+         const maxCount = getPackInputs().length;
+         // Ensure the max attribute is set but not less than 0
+         $('#pfp-count').attr('max', clamp(maxCount, 0, Infinity)); // Assumes $ is cash-dom
+         GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
          return; // Exit if auto-load is disabled
     }
 
@@ -55,19 +61,11 @@ async function loadFullPageIfNeeded(config) {
     const scrollCheckInterval = 100; // ms between height/input checks
     const maxScrollAttempts = 150; // Safety break to prevent infinite loops
 
-    // Check if necessary functions/constants are available before starting the process
-    if (typeof getPackInputs !== 'function' || typeof $ === 'undefined' || typeof SELECTOR === 'undefined') {
-         const errorMessage = "Required dependencies (getPackInputs, $, or SELECTOR) missing for auto-load. Auto-loading aborted.";
-         GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
-         if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Auto-Load Error', errorMessage, 'error', config);
-         else alert(`Pack Filler Pro Error: ${errorMessage}`);
-         return; // Abort if critical dependencies are missing
-    }
     // Check if fillPacks is available if auto-fill is enabled
     if (config.autoFillLoaded && typeof fillPacks !== 'function') {
          const errorMessage = "fillPacks function not found, but auto-fill loaded is enabled. Auto-fill will be skipped.";
          GM_log(`Pack Filler Pro: WARNING - ${errorMessage}`);
-          if (typeof SWAL_TOAST === 'function') SWAL_TOAST('Auto-Fill Warning', errorMessage, 'warning', config);
+         SWAL_TOAST('Auto-Fill Warning', sanitize(errorMessage), 'warning', config);
     }
 
 
@@ -77,7 +75,6 @@ async function loadFullPageIfNeeded(config) {
     const initialInputCount = getPackInputs().length;
 
     GM_log(`Pack Filler Pro: Starting auto-load. Initial height: ${currentHeight}, Initial Inputs: ${initialInputCount}.`);
-
 
     // Initial short wait for page elements to render before the first scroll/check
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -140,9 +137,8 @@ async function loadFullPageIfNeeded(config) {
     GM_log(`Pack Filler Pro: Full page auto-load process finished. Final visible input count after load: ${finalInputCount}.`);
 
     // Update the max attribute for the count input based on the total loaded inputs
-     // Use clamp from domUtils.js or define locally if needed
-     const clampFn = typeof clamp === 'function' ? clamp : (val, min, max) => Math.min(max, Math.max(min, val));
-     $('#pfp-count').attr('max', clampFn(finalInputCount, 0, Infinity)); // Assumes $ is cash-dom
+     // Assumes getPackInputs, $, and clamp are available (already checked above)
+     $('#pfp-count').attr('max', clamp(finalInputCount, 0, Infinity)); // Assumes $ is cash-dom
      GM_log(`Pack Filler Pro: Max count for input updated to ${finalInputCount} after auto-load.`);
 
 
@@ -157,17 +153,17 @@ async function loadFullPageIfNeeded(config) {
     } else {
         GM_log("Pack Filler Pro: Auto-fill loaded is disabled, fillPacks function not found, or no inputs were found. Auto-fill skipped.");
         // Optional: Show a final toast message if auto-fill didn't run
-         if (typeof SWAL_TOAST === 'function') {
+         if (typeof SWAL_TOAST === 'function') { // Ensure SWAL_TOAST is available
               if (finalInputCount > initialInputCount) {
-                   SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`, 'success', config); // Pass config to SWAL
+                   SWAL_TOAST(sanitize(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`), 'success', config); // Sanitize message
               } else if (initialInputCount > 0) {
-                   SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially.`, 'info', config); // Pass config to SWAL
+                   SWAL_TOAST(sanitize(`Auto-load finished. Found ${initialInputCount} packs initially.`), 'info', config); // Sanitize message
               } else {
                    // Check if any inputs exist at all (even hidden ones) using the selector
                    if ($(SELECTOR).length === 0) {
-                        SWAL_TOAST('No pack inputs found on the page.', 'info', config); // Pass config to SWAL
+                        SWAL_TOAST(sanitize('No pack inputs found on the page.'), 'info', config); // Sanitize message
                    } else {
-                        SWAL_TOAST("Auto-load finished. Found packs.", 'info', config); // Pass config to SWAL
+                        SWAL_TOAST(sanitize("Auto-load finished. Found packs."), 'info', config); // Sanitize message
                    }
               }
          } else {
