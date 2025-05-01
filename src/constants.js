@@ -28,7 +28,7 @@ const PATTERN_INTENSITY_INPUT_ID = 'pfp-pattern-intensity'; // ID for pattern in
 // Default settings for the script.
 // This object defines the initial state and structure of the configuration.
 const DEFAULT_CONFIG = {
-    version: 22,        // Incremented config version for fillLogic restructure
+    version: 23,        // Incremented config version for UI updates
     lastMode: 'fixed',
     lastCount: 10,
     lastFixedQty: 1,
