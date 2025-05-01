@@ -1,8 +1,10 @@
 // This file handles loading, saving, and managing the script's configuration.
 // It relies on GM_getValue and GM_setValue from the UserScript API.
 
-// Assumes 'DEFAULT_CONFIG', 'CONFIG_KEY' from constants.js, and GM_* functions are accessible
+// Assumes 'DEFAULT_CONFIG', 'CONFIG_KEY' from constants.js,
+// clamp function from domUtils.js, and GM_* functions are accessible
 // via @require in the main script.
+
 
 /* --- Configuration Management --- */
 
@@ -38,16 +40,13 @@ function loadConfig() {
 
                  // Migration for versions < 12 (Panel position change)
                  // If panelPos existed and had a bottom value (old format), reset it to new default top/right
-                 if (parsed.version < 12 && cfg.panelPos && cfg.panelPos.bottom !== 'auto') {
+                 // Also check if panelPos is actually an object before accessing properties
+                 if (parsed.version < 12 && typeof cfg.panelPos === 'object' && cfg.panelPos !== null && cfg.panelPos.bottom !== 'auto') {
                       cfg.panelPos = { ...DEFAULT_CONFIG.panelPos };
                       GM_log("Pack Filler Pro: Migrated panel position to default top/right (v12 migration).");
                  }
 
                  // Migration for versions < 24 (New pattern and random clicker options)
-                 // The initial merge {...cfg, ...parsed} handles adding new properties
-                 // from DEFAULT_CONFIG if they weren't in the saved 'parsed' object.
-                 // We can add specific checks here if older versions had different implicit defaults
-                 // or if we need to transform data from an old format.
                  if (parsed.version < 24) {
                       GM_log("Pack Filler Pro: Applying v24 migration (ensuring new properties).");
                       // No specific transformation needed for v24 as they are new properties,
@@ -119,7 +118,8 @@ function saveConfig(configToSave) {
     } catch (e) {
         GM_log("Pack Filler Pro: Error saving Pack Filler Pro config.", e);
          // Consider showing a user-facing error if saving is critical and failing repeatedly
-         // if (typeof SWAL_TOAST !== 'undefined') SWAL_TOAST('Config Save Error', 'Failed to save settings.', 'error', configToSave); // Requires config in scope
+         // Requires SWAL_TOAST and config in scope.
+         // if (typeof SWAL_TOAST !== 'undefined' && configToSave) SWAL_TOAST('Config Save Error', 'Failed to save settings.', 'error', configToSave);
     }
 }
 
@@ -150,21 +150,35 @@ const debouncedSaveConfig = (function() {
  * Validates key parts of the fill configuration to ensure quantities and pattern parameters are reasonable.
  * Logs warnings if values are outside expected ranges or types.
  * Assumes config object and GM_log are available.
- * Assumes MAX_QTY constant is available.
+ * Assumes MAX_QTY constant and clamp function from domUtils.js are available.
+ * Assumes MainThreadFillStrategies from fillLogic.js is available.
  * @param {object} config - The script's configuration object to validate.
- * @throws {Error} Throws an error if a critical validation fails (e.g., min > max).
+ * @throws {Error} Throws an error if a critical validation fails (e.g., clamp function missing).
  */
 function validateFillConfig(config) {
     // Basic validation
     if (typeof config !== 'object' || config === null) {
         const errorMsg = "Validation failed: Invalid config object.";
         GM_log(`Pack Filler Pro: ERROR - ${errorMsg}`, config);
-        throw new Error(errorMsg);
+        throw new Error(errorMsg); // Critical error, abort validation
     }
+
+    // Check critical dependencies
+     if (typeof clamp !== 'function') {
+          const errorMsg = "Validation failed: clamp function from domUtils.js not found.";
+          GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
+          throw new Error(errorMsg); // Critical error, abort validation
+     }
+     if (typeof MainThreadFillStrategies === 'undefined') {
+          const errorMsg = "Validation failed: MainThreadFillStrategies object from fillLogic.js not found.";
+          GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
+          throw new Error(errorMsg); // Critical error, abort validation
+     }
+
 
     const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99; // Fallback MAX_QTY
 
-    // Validate quantity ranges
+    // Validate quantity ranges - clamp ensures they are numbers and within bounds
     config.lastMinQty = clamp(config.lastMinQty, 0, maxQty);
     config.lastMaxQty = clamp(config.lastMaxQty, 0, maxQty);
     config.lastFixedQty = clamp(config.lastFixedQty, 0, maxQty);
@@ -174,68 +188,69 @@ function validateFillConfig(config) {
         const warningMsg = `Validation warning: lastMinQty (${config.lastMinQty}) is greater than lastMaxQty (${config.lastMaxQty}). Setting lastMinQty = lastMaxQty.`;
         GM_log(`Pack Filler Pro: WARNING - ${warningMsg}`);
         config.lastMinQty = config.lastMaxQty; // Correct invalid range
-        // Note: We correct and warn, but don't throw, allowing the script to proceed
     }
 
-    // Validate pattern parameters (basic clamping/defaulting)
-    if (typeof config.patternScale !== 'number' || isNaN(config.patternScale) || config.patternScale < 1) {
+    // Validate pattern parameters (basic clamping/defaulting) - ensure they are numbers before clamping
+    config.patternScale = parseInt(config.patternScale, 10);
+    if (isNaN(config.patternScale) || config.patternScale < 1) {
         GM_log(`Pack Filler Pro: Validation warning: Invalid patternScale (${config.patternScale}). Setting to default ${DEFAULT_CONFIG.patternScale}.`);
         config.patternScale = DEFAULT_CONFIG.patternScale;
     } else {
-        config.patternScale = Math.max(1, Math.round(config.patternScale)); // Ensure integer >= 1
+        config.patternScale = Math.max(1, config.patternScale); // Ensure >= 1 after parsing
     }
 
-     if (typeof config.patternIntensity !== 'number' || isNaN(config.patternIntensity) || config.patternIntensity < 0 || config.patternIntensity > 1) {
-         // Intensity is stored 0-1 in config, UI slider is 0-100
-         // Assumes conversion happens in UI update/config update
-         // This validation is for the stored config value (0.0 to 1.0)
+     config.patternIntensity = parseFloat(config.patternIntensity);
+     if (isNaN(config.patternIntensity) || config.patternIntensity < 0 || config.patternIntensity > 1) {
+         // Intensity is stored 0-1 in config
           GM_log(`Pack Filler Pro: Validation warning: Invalid patternIntensity (${config.patternIntensity}). Setting to default ${DEFAULT_CONFIG.patternIntensity}.`);
           config.patternIntensity = DEFAULT_CONFIG.patternIntensity;
      } else {
           config.patternIntensity = clamp(config.patternIntensity, 0.0, 1.0); // Ensure it's between 0 and 1
      }
 
-
-    // Validate patternType exists in main thread strategies
-     // Assumes MainThreadFillStrategies is defined in fillLogic.js and available in scope due to @require order
-     if (typeof MainThreadFillStrategies === 'object' && !MainThreadFillStrategies[config.patternType]) {
-         GM_log(`Pack Filler Pro: Validation warning: Unknown patternType "${config.patternType}". Setting to default "${DEFAULT_CONFIG.patternType}".`);
-         config.patternType = DEFAULT_CONFIG.patternType;
-     } else if (typeof MainThreadFillStrategies !== 'object') {
-          // If MainThreadFillStrategies isn't even available, a more critical error likely occurred earlier.
-          // The script might fail elsewhere, but log the warning here.
-          GM_log("Pack Filler Pro: Validation warning: MainThreadFillStrategies object not found. Cannot validate patternType.");
+     // noiseSeed can be any string or empty, no specific validation needed beyond type check if desired
+     if (typeof config.noiseSeed !== 'string') {
+          GM_log(`Pack Filler Pro: Validation warning: Invalid noiseSeed type (${typeof config.noiseSeed}). Setting to empty string.`);
+          config.noiseSeed = '';
      }
 
-    // Validate fillEmptyOnly is boolean
+
+    // Validate patternType exists in main thread strategies
+     if (!MainThreadFillStrategies[config.patternType]) {
+         GM_log(`Pack Filler Pro: Validation warning: Unknown patternType "${config.patternType}". Setting to default "${DEFAULT_CONFIG.patternType}".`);
+         config.patternType = DEFAULT_CONFIG.patternType;
+     }
+
+    // Validate boolean flags - ensure they are booleans
     if (typeof config.fillEmptyOnly !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid fillEmptyOnly value (${config.fillEmptyOnly}). Setting to default ${DEFAULT_CONFIG.fillEmptyOnly}.`);
          config.fillEmptyOnly = DEFAULT_CONFIG.fillEmptyOnly;
     }
-
-    // Validate autoFillLoaded is boolean
      if (typeof config.autoFillLoaded !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid autoFillLoaded value (${config.autoFillLoaded}). Setting to default ${DEFAULT_CONFIG.autoFillLoaded}.`);
          config.autoFillLoaded = DEFAULT_CONFIG.autoFillLoaded;
      }
-
-    // Validate scrollToBottomAfterLoad is boolean
      if (typeof config.scrollToBottomAfterLoad !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid scrollToBottomAfterLoad value (${config.scrollToBottomAfterLoad}). Setting to default ${DEFAULT_CONFIG.scrollToBottomAfterLoad}.`);
          config.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
      }
-
-     // Validate loadFullPage is boolean
       if (typeof config.loadFullPage !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid loadFullPage value (${config.loadFullPage}). Setting to default ${DEFAULT_CONFIG.loadFullPage}.`);
          config.loadFullPage = DEFAULT_CONFIG.loadFullPage;
       }
-
-    // Validate panelVisible is boolean
      if (typeof config.panelVisible !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid panelVisible value (${config.panelVisible}). Setting to default ${DEFAULT_CONFIG.panelVisible}.`);
          config.panelVisible = DEFAULT_CONFIG.panelVisible;
      }
+     if (typeof config.isDarkMode !== 'boolean') {
+         GM_log(`Pack Filler Pro: Validation warning: Invalid isDarkMode value (${config.isDarkMode}). Setting to default ${DEFAULT_CONFIG.isDarkMode}.`);
+         config.isDarkMode = DEFAULT_CONFIG.isDarkMode;
+     }
+      if (typeof config.lastClear !== 'boolean') { // Added lastClear validation
+         GM_log(`Pack Filler Pro: Validation warning: Invalid lastClear value (${config.lastClear}). Setting to default ${DEFAULT_CONFIG.lastClear}.`);
+         config.lastClear = DEFAULT_CONFIG.lastClear;
+     }
+
 
     // Validate panelPos structure (basic check)
      if (typeof config.panelPos !== 'object' || config.panelPos === null || typeof config.panelPos.top === 'undefined' || typeof config.panelPos.right === 'undefined' || typeof config.panelPos.bottom === 'undefined' || typeof config.panelPos.left === 'undefined') {
@@ -243,18 +258,11 @@ function validateFillConfig(config) {
          config.panelPos = { ...DEFAULT_CONFIG.panelPos };
      }
 
-    // Validate isDarkMode is boolean
-     if (typeof config.isDarkMode !== 'boolean') {
-         GM_log(`Pack Filler Pro: Validation warning: Invalid isDarkMode value (${config.isDarkMode}). Setting to default ${DEFAULT_CONFIG.isDarkMode}.`);
-         config.isDarkMode = DEFAULT_CONFIG.isDarkMode;
-     }
-
-    // Validate clickPageRandomCount
-    if (typeof config.clickPageRandomCount !== 'number' || isNaN(config.clickPageRandomCount) || config.clickPageRandomCount < 1) {
+    // Validate clickPageRandomCount - ensure it's a number and >= 1
+    config.clickPageRandomCount = parseInt(config.clickPageRandomCount, 10);
+    if (isNaN(config.clickPageRandomCount) || config.clickPageRandomCount < 1) {
          GM_log(`Pack Filler Pro: Validation warning: Invalid clickPageRandomCount value (${config.clickPageRandomCount}). Setting to minimum 1.`);
-         config.clickPageRandomCount = 1; // Ensure at least 1
-    } else {
-         config.clickPageRandomCount = Math.round(config.clickPageRandomCount); // Ensure integer
+         config.clickPageRandomCount = 1;
     }
 
 
