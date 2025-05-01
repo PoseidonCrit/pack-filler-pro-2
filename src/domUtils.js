@@ -1,7 +1,9 @@
 // This file contains functions for interacting with the DOM and utility helpers.
-// It relies on the cash-dom library ($) and constants like SELECTOR and MAX_QTY,
-// which are assumed to be defined in src/constants.js and available via @require.
-// It also assumes SWAL_ALERT is available from src/swalHelpers.js via @require.
+// It relies on the cash-dom library ($) and constants like SELECTOR and MAX_QTY.
+// It includes the essential clamp and sanitize functions.
+
+// It assumes $ from cash-dom and SELECTOR, MAX_QTY from constants.js are available.
+
 
 /* --- DOM Helpers & Utilities --- */
 
@@ -14,7 +16,7 @@
 function getPackInputs() {
     // Check critical dependencies
     if (typeof $ === 'undefined' || typeof SELECTOR === 'undefined') {
-        GM_log("Pack Filler Pro: getPackInputs dependencies ($ or SELECTOR) missing. Returning empty array.");
+        // GM_log("Pack Filler Pro: getPackInputs dependencies ($ or SELECTOR) missing. Returning empty array."); // Minimal logging
         return []; // Return empty array if dependencies are missing
     }
     try {
@@ -22,13 +24,13 @@ function getPackInputs() {
          // Use filter to check for valid HTMLInputElement and visibility
          const inputs = $(SELECTOR).get();
          if (!Array.isArray(inputs)) {
-              GM_log("Pack Filler Pro: $(SELECTOR).get() did not return an array. Returning empty array.", inputs);
+              // GM_log("Pack Filler Pro: $(SELECTOR).get() did not return an array. Returning empty array.", inputs); // Minimal logging
               return [];
          }
         // Use offsetParent to check visibility - elements with offsetParent === null are hidden
         return inputs.filter(el => el instanceof HTMLInputElement && el.offsetParent !== null);
     } catch (e) {
-         GM_log("Pack Filler Pro: Error getting pack inputs.", e);
+         // GM_log("Pack Filler Pro: Error getting pack inputs.", e); // Minimal logging
          return []; // Return empty array on error
     }
 }
@@ -47,7 +49,7 @@ const clamp = (val, min, max) => {
 
 
     if (isNaN(numVal)) {
-        GM_log(`Pack Filler Pro: clamp received non-numeric value '${val}'. Clamping to min (${safeMin}).`);
+        // GM_log(`Pack Filler Pro: clamp received non-numeric value '${val}'. Clamping to min (${safeMin}).`); // Minimal logging
         return safeMin; // Return min for non-numeric input
     }
 
@@ -64,15 +66,19 @@ const clamp = (val, min, max) => {
 function updateInput(input, qty) {
     // Check critical dependencies
     if (!(input instanceof HTMLInputElement)) {
-        GM_log("Pack Filler Pro: updateInput called with invalid input element.", input);
+        // GM_log("Pack Filler Pro: updateInput called with invalid input element.", input); // Minimal logging
         return; // Abort if input is not valid
     }
      if (typeof clamp !== 'function') {
-          GM_log("Pack Filler Pro: updateInput dependencies (clamp) missing. Aborting.");
+          // GM_log("Pack Filler Pro: updateInput dependencies (clamp) missing. Aborting."); // Minimal logging
           return; // Abort if clamp is missing
      }
+     // Assumes MAX_QTY from constants.js is available
+     if (typeof MAX_QTY === 'undefined') {
+         // GM_log("Pack Filler Pro: updateInput dependency (MAX_QTY) missing. Using fallback 99."); // Minimal logging
+     }
 
-    // Uses MAX_QTY from src/constants.js (assumed available via @require)
+
     const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99; // Fallback MAX_QTY
     // Clamp and round the quantity before setting the value
     const clampedQty = clamp(qty, 0, maxQty);
@@ -91,22 +97,20 @@ function updateInput(input, qty) {
             input.dispatchEvent(new Event('change', { bubbles: true }));
         } catch (e) {
             // Log the error but don't necessarily abort, as the value might still be set.
-            GM_log(`Pack Filler Pro: Error dispatching input/change events for input ${input.id || input.name || 'unknown'}: ${e.message}`, e);
+            // GM_log(`Pack Filler Pro: Error dispatching input/change events for input ${input.id || input.name || 'unknown'}: ${e.message}`, e); // Minimal logging
         }
-         // Optional: Add a small delay and re-check/re-dispatch if needed, but this adds complexity.
     }
 }
 
 /**
  * Sets the value of all visible pack inputs to zero.
- * Provides user feedback via SweetAlert2.
- * Assumes getPackInputs, updateInput from this file, GM_log, and SWAL_ALERT are available.
- * Assumes config object might be needed by SWAL_ALERT (passed as null here as this function doesn't need it).
+ * Assumes getPackInputs, updateInput from this file are available.
+ * Assumes SWAL_ALERT is available for feedback.
  */
 function clearAllInputs() {
     // Check critical dependencies
     if (typeof getPackInputs !== 'function' || typeof updateInput !== 'function') {
-        GM_log("Pack Filler Pro: clearAllInputs dependencies (getPackInputs or updateInput) missing. Aborting.");
+        // GM_log("Pack Filler Pro: clearAllInputs dependencies (getPackInputs or updateInput) missing. Aborting."); // Minimal logging
         // Use fallback alert if SWAL_ALERT is not available
         if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Clear Error', 'Required functions missing. Could not clear inputs.', 'error', null);
         else alert('Pack Filler Pro Error: Could not clear inputs due to missing functions.');
@@ -117,25 +121,21 @@ function clearAllInputs() {
     if (inputs.length > 0) {
         try {
              inputs.forEach(input => updateInput(input, 0)); // Uses updateInput from this file
-             GM_log(`Cleared ${inputs.length} pack input(s).`);
-             // Assumes SWAL_ALERT is available and accepts optional config
+             // GM_log(`Cleared ${inputs.length} pack input(s).`); // Minimal logging
+             // Assumes SWAL_ALERT is available and accepts optional config (pass null for config here)
               if (typeof SWAL_ALERT === 'function') {
-                 // Pass null for config here as clearAllInputs doesn't strictly need config for itself,
-                 // but SWAL_ALERT might need it for dark mode.
-                  // Assumes sanitize is available
+                 // Assumes sanitize is available
                   if (typeof sanitize === 'function') {
-                      SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null);
+                      SWAL_ALERT("Cleared Packs", sanitize(`Set ${inputs.length} visible pack input(s) to zero.`), 'success', null);
                   } else {
-                       GM_log("Pack Filler Pro: Sanitize function not found for clear feedback.");
-                       SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null); // Use unsanitized
+                       SWAL_ALERT("Cleared Packs", `Set ${inputs.length} visible pack input(s) to zero.`, 'success', null); // Fallback if sanitize missing
                   }
-
               } else {
-                  GM_log("Pack Filler Pro: SWAL_ALERT function not found for clear feedback.");
+                  // GM_log("Pack Filler Pro: SWAL_ALERT function not found for clear feedback."); // Minimal logging
               }
         } catch (e) {
              const msg = `Error clearing inputs: ${e.message}`;
-             GM_log(`Pack Filler Pro: ERROR - ${msg}`, e);
+             // GM_log(`Pack Filler Pro: ERROR - ${msg}`, e); // Minimal logging
               // Assumes SWAL_ALERT and sanitize are available
               if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Clear Error', sanitize(msg), 'error', null);
               else alert(`Pack Filler Pro Error: ${msg}`);
@@ -143,18 +143,17 @@ function clearAllInputs() {
 
 
     } else {
-        GM_log("Clear All: No visible pack inputs found to clear.");
+        // GM_log("Clear All: No visible pack inputs found to clear."); // Minimal logging
          if (typeof SWAL_ALERT === 'function') {
               SWAL_ALERT("Clear Packs", "No visible pack inputs found to clear.", 'info', null);
          } else {
-             GM_log("Pack Filler Pro: SWAL_ALERT function not found for clear feedback (no inputs).");
+             // GM_log("Pack Filler Pro: SWAL_ALERT function not found for clear feedback (no inputs)."); // Minimal logging
          }
     }
 }
 
 // Basic HTML sanitization helper
-// Prevents simple XSS by escaping HTML entities. Not a complete solution for all cases.
-// Assumes this function is used before inserting user-provided strings into HTML (like in Swal).
+// Prevents simple XSS by escaping HTML entities.
 /**
  * Sanitizes a string to prevent basic HTML injection.
  * @param {string} str - The string to sanitize.
@@ -162,7 +161,7 @@ function clearAllInputs() {
  */
 function sanitize(str) {
     if (typeof str !== 'string') {
-        GM_log("Pack Filler Pro: sanitize received non-string input.", str);
+        // GM_log("Pack Filler Pro: sanitize received non-string input.", str); // Minimal logging
         return '';
     }
     try {
@@ -171,7 +170,7 @@ function sanitize(str) {
         div.appendChild(document.createTextNode(str));
         return div.innerHTML; // This will return the escaped HTML
     } catch (e) {
-         GM_log("Pack Filler Pro: Error sanitizing string.", e);
+         // GM_log("Pack Filler Pro: Error sanitizing string.", e); // Minimal logging
          return ''; // Return empty string on error
     }
 }
