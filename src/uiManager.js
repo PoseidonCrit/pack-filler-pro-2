@@ -210,7 +210,10 @@ function updatePatternParamsDisplay(patternType) {
  * @param {object} [position=null] - Optional position object {top, right, bottom, left} to apply.
  */
 function updatePanelVisibility(config, isVisible, position = null) { // Accept config here
-    if (!panelElement || !toggleButtonElement) return;
+    if (!panelElement || !toggleButtonElement) {
+         GM_log("Pack Filler Pro: updatePanelVisibility called but panel or toggle button elements not found.");
+         return; // Add safeguard
+    }
 
     $(panelElement).toggleClass('hidden', !isVisible);
     $(toggleButtonElement).toggleClass('hidden', isVisible);
@@ -232,6 +235,7 @@ function updatePanelVisibility(config, isVisible, position = null) { // Accept c
         };
     }
     debouncedSaveConfig(config); // Pass config
+    GM_log(`Pack Filler Pro: Panel visibility set to ${isVisible}.`);
 }
 
 // Uses $ (cash-dom) for brevity
@@ -245,7 +249,10 @@ function updatePanelVisibility(config, isVisible, position = null) { // Accept c
  * @param {object} config - The script's configuration object.
  */
 function loadConfigIntoUI(config) { // Accept config here
-    if (!panelElement) return;
+    if (!panelElement) {
+        GM_log("Pack Filler Pro: loadConfigIntoUI called but panel element not found.");
+        return; // Add safeguard
+    }
 
     $('#pfp-mode').val(config.lastMode);
     $('#pfp-count').val(config.lastCount);
@@ -296,7 +303,10 @@ function loadConfigIntoUI(config) { // Accept config here
  * @param {object} config - The script's configuration object to update.
  */
 function updateConfigFromUI(config) { // Accept config here
-    if (!panelElement) return;
+    if (!panelElement) {
+        GM_log("Pack Filler Pro: updateConfigFromUI called but panel element not found.");
+        return; // Add safeguard
+    }
 
     config.lastMode = $('#pfp-mode').val() || DEFAULT_CONFIG.lastMode;
     config.lastCount = parseInt($('#pfp-count').val(), 10) || 0;
@@ -345,7 +355,10 @@ function updateConfigFromUI(config) { // Accept config here
  */
 function applyDarkMode(config, enable) { // Accept config here
     // Assumes panelElement is available
-    if (!panelElement) return;
+    if (!panelElement || !toggleButtonElement) {
+         GM_log("Pack Filler Pro: applyDarkMode called but panel or toggle button elements not found.");
+         return; // Add safeguard
+    }
 
     // Apply dark mode class to the panel
     $(panelElement).toggleClass('dark-mode', enable);
