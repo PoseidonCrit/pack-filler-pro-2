@@ -247,6 +247,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
          if (mode === 'unlimited') {
               potentialInputsToFill = allInputs; // All visible
          } else {
+               // THIS IS LINE 606 IN THE CONCATENATED SCRIPT WHERE THE ERROR OCCURS
                const fillCount = calculateFillCount(config, availablePacks); // Pass config
               potentialInputsToFill = allInputs.slice(0, fillCount);
          }
