@@ -1,430 +1,544 @@
 // This file contains the main logic for calculating and applying quantities to inputs.
 // It uses constants and DOM helper functions.
-// Note: This module now accepts the 'config' object as a parameter where needed.
 
-// It assumes 'MAX_QTY', 'getPackInputs', 'clamp', 'updateInput',
-// 'clearAllInputs', 'SWAL_ALERT', 'SWAL_TOAST', 'updateConfigFromUI',
-// and the pattern worker (patternWorker) are accessible.
+// Assumes constants (MAX_QTY, etc.), utils (getPackInputs, clamp, updateInput, clearAllInputs),
+// helpers (SWAL_ALERT, SWAL_TOAST), config manager (updateConfigFromUI),
+// and the persistent worker instance (patternWorker) are accessible.
 
-/* --- Pattern Strategies --- */
-// Note: Perlin Noise and clamp implementations are now ONLY in the worker code string.
-// These functions are no longer needed directly in the main thread's fillLogic.js
-// unless the worker initialization fails and we fallback.
+// --- Sanitization & Validation ---
 
-// Main thread strategies (simple ones or fallback)
-const FillStrategies = {
-    // Random strategy (uses existing chooseQuantity logic)
-    random: (config, index, total) => chooseQuantity(config),
+/**
+ * Sanitizes a string by setting it as textContent and retrieving innerHTML.
+ * Basic protection against XSS in feedback messages.
+ * @param {string} str - The input string.
+ * @returns {string} Sanitized string.
+ */
+const sanitize = (str) => {
+    if (typeof str !== 'string') str = String(str); // Ensure input is a string
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+};
 
-    // Gradient strategy (can run on main thread, but included in worker for consistency if needed)
-    // Keeping a fallback here in case worker fails
-    gradient: (config, index, total) => {
-        const intensity = config.patternIntensity || 1.0;
-        const minQty = config.lastMinQty;
-        const maxQty = config.lastMaxQty;
-        const range = maxQty - minQty;
-        const MAX_QTY = 99; // Define MAX_QTY locally for fallback
+/**
+ * Validates the configuration relevant to the fill operation.
+ * @param {object} config - The configuration object.
+ * @throws {Error} If validation fails.
+ */
+const validateFillConfig = (config) => {
+    const errors = [];
+    // Check modes (add pattern types if needed)
+    if (!['fixed', 'max', 'unlimited', 'random', 'simplex', 'gradient', 'alternating'].includes(config.patternType)) {
+         // Note: 'lastMode' is less relevant now as patternType controls the logic primarily
+         // Consider removing lastMode or making patternType the single source of truth for fill style
+        errors.push(`Invalid pattern type selected: ${config.patternType}`);
+    }
+    // Validate quantities based on the effective mode/pattern
+    switch(config.patternType) {
+        case 'fixed':
+        case 'unlimited': // uses fixedQty
+            if (typeof config.lastFixedQty !== 'number' || config.lastFixedQty < 0 || config.lastFixedQty > MAX_QTY) {
+                errors.push(`Invalid Fixed Quantity: ${config.lastFixedQty}`);
+            }
+            break;
+        case 'max':
+        case 'random': // uses min/max
+        case 'simplex':
+        case 'gradient':
+        case 'alternating':
+            if (typeof config.lastMinQty !== 'number' || config.lastMinQty < 0 || config.lastMinQty > MAX_QTY) {
+                errors.push(`Invalid Min Quantity: ${config.lastMinQty}`);
+            }
+            if (typeof config.lastMaxQty !== 'number' || config.lastMaxQty < config.lastMinQty || config.lastMaxQty > MAX_QTY) {
+                errors.push(`Invalid Max Quantity: ${config.lastMaxQty}`);
+            }
+            break;
+    }
+    // Validate pattern params if applicable
+    if (config.patternType === 'simplex' || config.patternType === 'gradient') {
+         if (typeof config.patternScale !== 'number' || config.patternScale < 10 || config.patternScale > 1000) {
+            errors.push(`Invalid Pattern Scale: ${config.patternScale}`);
+        }
+        if (typeof config.patternIntensity !== 'number' || config.patternIntensity < 0 || config.patternIntensity > 1) {
+            errors.push(`Invalid Pattern Intensity: ${config.patternIntensity}`);
+        }
+    }
+    if (config.patternType === 'simplex' && config.noiseSeed && typeof config.noiseSeed !== 'string' && typeof config.noiseSeed !== 'number') {
+         errors.push(`Invalid Noise Seed type: ${typeof config.noiseSeed}`);
+    }
 
-        // Assumes clamp is available globally from domUtils.js for fallback
-        const baseQty = minQty + (index / (total - 1)) * range;
-        let quantity = minQty + (baseQty - minQty) * intensity;
+    // Validate count if mode requires it (though count is less used now)
+    if (config.lastMode === 'fixed' || config.lastMode === 'max') { // Keep this check based on old 'lastMode' for now
+         if (typeof config.lastCount !== 'number' || config.lastCount < 0) {
+              errors.push(`Invalid Pack Count: ${config.lastCount}`);
+         }
+    }
+    // Validate max total
+    if (typeof config.maxTotalAmount !== 'number' || config.maxTotalAmount < 0) {
+         errors.push(`Invalid Max Total Amount: ${config.maxTotalAmount}`);
+    }
 
-        quantity = clamp(quantity, minQty, maxQty);
-        quantity = clamp(Math.round(quantity), 0, MAX_QTY);
 
-        return quantity;
-    },
-
-    // Alternating strategy (runs on main thread)
-    alternating: (config, index, total) => {
-         const minQty = config.lastMinQty;
-         const maxQty = config.lastMaxQty;
-         const MAX_QTY = 99; // Define MAX_QTY locally
-         // Assumes clamp is available globally from domUtils.js
-         return index % 2 === 0 ? clamp(minQty, 0, MAX_QTY) : clamp(maxQty, 0, MAX_QTY);
-    },
-
-    // Perlin strategy fallback (runs on main thread if worker fails or is unavailable)
-    perlinFallback: (config, index, total) => {
-         // This requires the perlinNoise and clamp functions to be available
-         // in the main thread's scope if the worker fails.
-         // For now, we'll rely on the worker. If fallback is essential,
-         // we might need to include perlinNoise/clamp in domUtils or similar.
-         // For this iteration, this is a placeholder indicating where the fallback logic would go.
-         // A more robust solution would ensure perlinNoise is available in the main thread.
-         GM_log("Pack Filler Pro: Perlin noise calculation falling back to main thread (worker failed or unavailable). Performance may be impacted.");
-         // Replicate logic from worker (requires clamp and perlinNoise in this scope)
-         // Assuming clamp and perlinNoise are available globally if this fallback is hit
-         // Note: perlinNoise is NOT currently available in the main thread scope.
-         // This fallback will fail unless perlinNoise is added to domUtils or similar.
-         // For now, returning a simple random value as a temporary fallback
-         GM_log("Pack Filler Pro: Perlin noise fallback not fully implemented on main thread. Using random quantity.");
-         const minQty = config.lastMinQty;
-         const maxQty = config.lastMaxQty;
-         const MAX_QTY = 99; // Define MAX_QTY locally
-         const clampedMin = clamp(minQty, 0, MAX_QTY);
-         const clampedMax = clamp(maxQty, 0, MAX_QTY);
-         if (clampedMin > clampedMax) return 0;
-         return Math.floor(Math.random() * (clampedMax - clampedMin + 1)) + clampedMin;
+    if (errors.length) {
+        throw new Error(`Configuration Error(s): ${errors.join(', ')}`);
     }
 };
 
-// Strategy selector
-function getFillStrategy(config, useFallback = false) {
-    const type = config.patternType;
-    if (useFallback && type === 'perlin') {
-        // If fallback is requested for Perlin, return the main thread fallback
-        return FillStrategies.perlinFallback;
-    }
-    switch (type) {
-        case 'perlin':
-             // If not requesting fallback, return the worker placeholder (actual logic in worker)
-             // This function is mainly for determining the *type* of strategy.
-             // The actual execution logic is in fillPacks.
-             return FillStrategies.perlin; // Placeholder for worker strategy
-        case 'gradient':
-            return FillStrategies.gradient;
-        case 'alternating':
-            return FillStrategies.alternating;
-        case 'random': // Fallback to random if patternType is 'random' or unknown
-        default:
-            return FillStrategies.random;
-    }
-}
 
-/* --- Performance Optimization: Virtual DOM Batch Update --- */
+// --- Worker Interaction ---
+
+let _workerRequestId = 0;
+const _pendingWorkerRequests = {};
+
 /**
- * Updates the value of multiple input elements in a batch to minimize DOM reflows.
- * @param {Array<HTMLInputElement>} inputs - The array of input elements to update.
- * @param {Array<number>} quantities - The array of new quantities corresponding to the inputs.
+ * Sends a message to the persistent worker and returns a Promise for the result.
+ * Handles message routing using request IDs.
+ * @param {object} data - Data to post to the worker (strategy, count, config).
+ * @param {number} timeoutMs - Timeout duration in milliseconds.
+ * @returns {Promise<object>} Promise resolving with { quantities, metadata } or rejecting with an error.
  */
-function virtualUpdate(inputs, quantities) {
-    if (!inputs || inputs.length === 0 || !quantities || inputs.length !== quantities.length) {
-        GM_log("Pack Filler Pro: virtualUpdate called with invalid inputs or quantities.");
-        return;
+function callWorker(data, timeoutMs = 10000) { // Increased default timeout
+    // Ensure worker is available (should be initialized in main script)
+    if (!patternWorker) {
+        return Promise.reject(new Error("Pattern worker is not available."));
     }
 
-    // Find the common parent of the pack containers
-    const packContainers = inputs.map(input => input.closest('.pack')).filter(Boolean);
-     if (packContainers.length === 0 || packContainers.length !== inputs.length) {
-          GM_log("Pack Filler Pro: virtualUpdate could not find .pack containers for all inputs or input count mismatch. Falling back to individual updates.");
-          inputs.forEach((input, i) => updateInput(input, quantities[i])); // Use updateInput from domUtils
-          return;
-     }
+    const requestId = ++_workerRequestId;
+    const messageData = { ...data, requestId }; // Add requestId to the data sent
 
-     const parentOfPacks = packContainers[0]?.parentNode;
-     if (!parentOfPacks) {
-         GM_log("Pack Filler Pro: virtualUpdate could not find the parent of .pack containers. Falling back to individual updates.");
-         inputs.forEach((input, i) => updateInput(input, quantities[i])); // Use updateInput from domUtils
-         return;
-     }
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            // Clean up the pending request and reject if timeout occurs
+            delete _pendingWorkerRequests[requestId];
+            GM_log(`Pack Filler Pro: Worker request ${requestId} timed out after ${timeoutMs}ms.`);
+            reject(new Error(`Worker request timed out after ${timeoutMs / 1000} seconds.`));
+        }, timeoutMs);
 
-     // Create a temporary div to hold the new HTML structure
-     const tempDiv = document.createElement('div');
-     tempDiv.style.display = 'none'; // Hide the temporary div
-     document.body.appendChild(tempDiv); // Append to body to allow innerHTML parsing
+        // Store the resolve/reject functions for this request
+        _pendingWorkerRequests[requestId] = { resolve, reject, timeoutId };
 
-     let newInnerHTML = '';
-
-     // Reconstruct the HTML for the relevant packs with updated input values
-     inputs.forEach((input, i) => {
-         const originalPack = inputs[i].closest('.pack');
-         if (originalPack) {
-             let packHtml = originalPack.outerHTML;
-             // Use a simple string replacement for the input value within the HTML string
-             // This is fragile if the input structure changes, but avoids complex DOM manipulation
-             // Ensure we handle potential attributes and closing tags correctly
-             const inputRegex = new RegExp(`(<input[^>]*id="${input.id}"[^>]*value=")[^"]*(".*?/?>)`, 'i'); // Added 'i' for case-insensitivity, adjusted regex for potential self-closing tag
-             packHtml = packHtml.replace(inputRegex, `$1${String(quantities[i])}$2`);
-             newInnerHTML += packHtml; // Accumulate the new HTML
-         }
-     });
-
-     // Set the innerHTML of the temporary div to parse the HTML string into DOM nodes
-     tempDiv.innerHTML = newInnerHTML;
-
-     // Create a DocumentFragment to hold the new nodes before inserting them
-     const fragment = document.createDocumentFragment();
-     while (tempDiv.firstChild) {
-         fragment.appendChild(tempDiv.firstChild);
-     }
-
-     // Replace the original pack containers with the new ones from the fragment
-     // This still involves multiple replaceChild operations, but avoids repeated string parsing.
-     // A true single batch update would require replacing the parentOfPacks's children entirely,
-     // which might remove other non-pack elements if they exist.
-     // Let's stick to replacing individual pack containers for safety, but use the fragment.
-     packContainers.forEach((originalPack, i) => {
-          const newPack = fragment.children[i]; // Get the corresponding new pack from the fragment
-          if (newPack) {
-               try {
-                   originalPack.parentNode.replaceChild(newPack, originalPack);
-               } catch (e) {
-                   GM_log("Pack Filler Pro: Error replacing pack container in virtualUpdate. Falling back to individual updates.", e);
-                   // Fallback for this specific input if replaceChild fails
-                   updateInput(inputs[i], quantities[i]);
-               }
-          } else {
-               GM_log("Pack Filler Pro: Mismatch between original and new pack containers in virtualUpdate. Falling back to individual updates for remaining.", inputs[i]);
-               // Fallback for this specific input
-               updateInput(inputs[i], quantities[i]);
-          }
-     });
-
-
-     // Clean up the temporary div
-     document.body.removeChild(tempDiv);
-
-
-     // After replacing the DOM nodes, dispatch events on the newly created inputs
-     // We need to re-select the inputs from the DOM as the original references are no longer valid.
-     const updatedInputs = getPackInputs().filter(input => inputs.some(originalInput => originalInput.id === input.id));
-
-     updatedInputs.forEach(input => {
-         input.dispatchEvent(new Event('input', { bubbles: true }));
-         input.dispatchEvent(new Event('change', { bubbles: true }));
-     });
-
-
-     GM_log(`Pack Filler Pro: Applied batch DOM update for ${inputs.length} inputs.`);
+        // Post the message to the persistent worker
+        try {
+             patternWorker.postMessage(messageData);
+             GM_log(`Pack Filler Pro: Posted message to worker with requestId: ${requestId}`);
+        } catch (postError) {
+             GM_log("Pack Filler Pro: Error posting message to worker:", postError);
+             // Clean up and reject if posting fails
+             clearTimeout(timeoutId);
+             delete _pendingWorkerRequests[requestId];
+             reject(new Error(`Failed to send message to worker: ${postError.message}`));
+        }
+    });
 }
 
+/**
+ * Initialize the message handler for the persistent worker.
+ * This should be called once during script initialization.
+ */
+function setupWorkerMessageHandler() {
+    if (!patternWorker) return;
+
+    patternWorker.onmessage = (e) => {
+        const { type, requestId, ...data } = e.data;
+        GM_log(`Pack Filler Pro: Received message from worker (Type: ${type}, RequestId: ${requestId})`);
+
+        if (type === 'log') {
+            GM_log("Pack Filler Pro Worker Log:", ...data.data);
+            return; // Don't try to resolve/reject for log messages
+        }
+
+        const request = _pendingWorkerRequests[requestId];
+        if (!request) {
+            GM_log(`Pack Filler Pro: Received worker response for unknown or timed out requestId: ${requestId}`);
+            return; // Ignore if request ID is not pending
+        }
+
+        // Clear the timeout associated with this request
+        clearTimeout(request.timeoutId);
+        // Remove the request from the pending map
+        delete _pendingWorkerRequests[requestId];
+
+        // Handle the response based on type
+        if (type === 'result') {
+            request.resolve(data); // Resolve the promise with { quantities, metadata }
+        } else if (type === 'error') {
+            GM_log("Pack Filler Pro: Worker reported an error:", data.message);
+            request.reject(new Error(`Worker Error: ${data.message}`)); // Reject the promise
+        } else {
+             GM_log(`Pack Filler Pro: Received unknown message type from worker: ${type}`);
+             request.reject(new Error(`Received unknown message type from worker: ${type}`));
+        }
+    };
+
+    // Basic error handler for the worker itself (e.g., script loading issues)
+    patternWorker.onerror = (error) => {
+        GM_log("Pack Filler Pro: Persistent worker encountered an error:", error);
+        // Optionally, reject all pending requests if a fundamental worker error occurs
+        Object.keys(_pendingWorkerRequests).forEach(id => {
+             const request = _pendingWorkerRequests[id];
+             clearTimeout(request.timeoutId);
+             request.reject(new Error(`Worker encountered an unrecoverable error: ${error.message}`));
+             delete _pendingWorkerRequests[id];
+        });
+        // Potentially try to re-initialize the worker or disable pattern features
+        // For now, just log it. Subsequent calls to callWorker will fail.
+        patternWorker = null; // Mark worker as unusable
+        SWAL_ALERT("Worker Error", "The pattern worker failed. Pattern features disabled.", "error");
+
+    };
+
+     GM_log("Pack Filler Pro: Persistent worker message handlers set up.");
+}
+
+
+// --- Main Thread Fill Strategies & Helpers ---
+
+/**
+ * Calculates quantity for 'fixed' mode.
+ */
+const fixedStrategy = (config, index, total) => {
+    return config.lastFixedQty; // Already clamped during config update
+};
+
+/**
+ * Calculates quantity for 'random' or 'max' modes.
+ */
+const randomStrategy = (config, index, total) => {
+    const min = config.lastMinQty;
+    const max = config.lastMaxQty;
+    // Ensure min <= max (should be handled by config update, but double check)
+    if (min > max) return 0;
+    // Calculate random integer between min and max (inclusive)
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+/**
+ * Calculates quantity for 'alternating' mode.
+ */
+const alternatingStrategy = (config, index, total) => {
+    return index % 2 === 0 ? config.lastMinQty : config.lastMaxQty;
+};
+
+/**
+ * Calculates quantity for 'gradient' mode (main thread fallback/version).
+ */
+const gradientStrategyMain = (config, index, total) => {
+    const intensity = config.patternIntensity || 1.0;
+    const minQty = config.lastMinQty;
+    const maxQty = config.lastMaxQty;
+    const range = maxQty - minQty;
+    const progress = total <= 1 ? 0.5 : index / (total - 1);
+    const baseValue = minQty + progress * range;
+    const midPoint = minQty + range / 2;
+    const finalValue = midPoint + (baseValue - midPoint) * intensity;
+    // Clamp here as this runs on main thread
+    return clamp(Math.round(finalValue), minQty, maxQty);
+};
+
+
+/**
+ * Selects the appropriate quantity calculation function for the main thread.
+ * @param {string} type - The patternType or mode.
+ * @returns {Function} The calculation function.
+ */
+function getMainThreadStrategy(type) {
+    switch (type) {
+        case 'fixed':
+        case 'unlimited': // uses fixedQty
+            return fixedStrategy;
+        case 'max': // 'max' mode uses random strategy
+        case 'random':
+            return randomStrategy;
+        case 'alternating':
+            return alternatingStrategy;
+        case 'gradient': // Main thread version/fallback
+            return gradientStrategyMain;
+        default:
+            GM_log(`getMainThreadStrategy: Unknown type "${type}", falling back to random.`);
+            return randomStrategy; // Fallback
+    }
+}
+
+/**
+ * Determines the target inputs based on mode and count settings.
+ * @param {Array<HTMLInputElement>} allInputs - All visible input elements.
+ * @param {object} config - The configuration object.
+ * @returns {Array<HTMLInputElement>} The array of inputs to potentially fill.
+ */
+function determineTargetInputs(allInputs, config) {
+     // Use patternType as the primary mode indicator now
+    const type = config.patternType;
+    const count = config.lastCount; // Still potentially used by legacy modes?
+    const availablePacks = allInputs.length;
+
+    // If mode is 'unlimited' or a pattern type that applies to all...
+    if (type === 'unlimited' || type === 'simplex' || type === 'gradient' || type === 'alternating' || type === 'random') {
+         // These modes/patterns typically apply to all available inputs unless count is restricted
+         // Let's check the old 'lastMode' for count restriction for backward compatibility/clarity
+         if (config.lastMode === 'fixed' || config.lastMode === 'max') {
+              // If the *old* mode was count-limited, respect that count
+               const fillCount = Math.max(0, Math.min(count, availablePacks));
+              return allInputs.slice(0, fillCount);
+         } else {
+              // Otherwise, apply to all visible inputs
+              return allInputs;
+         }
+    } else if (type === 'fixed' || type === 'max') {
+         // These modes inherently use the 'lastCount'
+          const fillCount = Math.max(0, Math.min(count, availablePacks));
+         return allInputs.slice(0, fillCount);
+    } else {
+         // Fallback: If patternType is somehow invalid, target none
+         GM_log(`determineTargetInputs: Unknown patternType "${type}", targeting no inputs.`);
+         return [];
+    }
+}
+
+
+// --- Main Fill Function ---
 
 /**
  * Fills pack inputs based on current settings.
- * Now incorporates pattern strategies and batch DOM updates, using a Web Worker for heavy calculations.
+ * Handles different modes, patterns, uses worker for complex patterns,
+ * provides fallback, and shows feedback.
  * @param {object} config - The script's configuration object.
- * @param {boolean} isAutoFill - True if triggered by the auto-load process.
+ * @param {boolean} [isAutoFill=false] - True if triggered by the auto-load process.
  */
-async function fillPacks(config, isAutoFill = false) { // Accept config here and make async
-    // Read current values from UI inputs before filling (only for manual trigger)
-    // This is now handled by the event listener calling updateConfigFromUI before fillPacks
-    // if (!isAutoFill) {
-    //     updateConfigFromUI(config); // Pass config
-    // }
-
-    // Use config object directly
-    const { lastMode: mode, lastCount: count, lastFixedQty: fixedQty, lastMinQty: minQty, lastMaxQty: maxQty, lastClear: clear, maxTotalAmount, fillEmptyOnly, patternType } = config;
-
-    const inputs = getPackInputs(); // Assumes getPackInputs is accessible
-    const availablePacks = inputs.length;
-
-    if (availablePacks === 0) {
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', 'No visible pack inputs found on the page.', 'warning', config); // Pass config to SWAL
-         GM_log("Fill operation aborted: No visible pack inputs found.");
-         return;
-    }
-
-    // Determine the set of inputs potentially targeted by mode/count
-    let potentialInputsToFill;
-     if (mode === 'unlimited') {
-          potentialInputsToFill = inputs; // All visible
-     } else {
-           const fillCount = calculateFillCount(config, availablePacks); // Pass config
-          potentialInputsToFill = inputs.slice(0, fillCount);
-     }
-    const targetedCount = potentialInputsToFill.length;
-
-
-    if (targetedCount === 0) {
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs targeted based on current mode (${mode}) and count (${count}).`, 'info', config); // Pass config to SWAL
-         GM_log(`Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
-         return;
-    }
-
-    // Apply 'Clear Before Fill' option (only for manual trigger)
-    if (clear && !isAutoFill) {
-        clearAllInputs(); // Assumes clearAllInputs is accessible
-    }
-
-    // Apply the 'Fill Empty Only' filter
-    const inputsToActuallyFill = fillEmptyOnly
-        ? potentialInputsToFill.filter(el => !el.value || parseInt(el.value, 10) === 0)
-        : potentialInputsToFill;
-
-    const filledCount = inputsToActuallyFill.length;
-
-
-    if (filledCount === 0 && targetedCount > 0) {
-         // If packs were targeted but none were empty (and Fill Empty Only is relevant)
-         const message = fillEmptyOnly
-             ? `No empty packs found among the ${targetedCount} targeted.`
-             : `All ${targetedCount} targeted packs already have a quantity.`;
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', message, 'info', config); // Pass config to SWAL
-         GM_log(`Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, Filled: ${filledCount}`);
-         return;
-    } else if (filledCount === 0 && targetedCount === 0) {
-         // This case is already handled above, but defensive check
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs matched criteria to fill.`, 'info', config); // Pass config to SWAL
-          GM_log(`Fill operation aborted: No packs matched criteria.`);
-         return;
-    }
-
-
+async function fillPacks(config, isAutoFill = false) {
+    GM_log(`Fill process started. Mode/Pattern: ${config.patternType}, AutoFill: ${isAutoFill}`);
     let quantitiesToApply = [];
-    const useMaxTotal = maxTotalAmount > 0;
-    let currentTotal = 0; // Track total added in this fill operation
-    let maxTotalHit = false;
+    let workerMetadata = null; // To store seed, actualTotal from worker
+    let calculationSource = "Main Thread"; // Track where calculation happened
 
-    const totalPacksToFill = inputsToActuallyFill.length;
+    try {
+        // 1. Validate Config
+        validateFillConfig(config);
 
-    // Determine the strategy to use for calculation *before* attempting to use the worker
-    // This ensures calculationStrategy is always defined.
-    let calculationStrategy = getFillStrategy(config, true); // Get the appropriate main thread strategy or fallback
-
-    // Check if we should attempt to use the worker for Perlin noise
-    if (patternType === 'perlin' && typeof patternWorker !== 'undefined' && patternWorker !== null) {
-        GM_log("Pack Filler Pro: Attempting to use Web Worker for Perlin noise calculation.");
-        try {
-            // Offload heavy computation to the worker
-            quantitiesToApply = await new Promise((resolve, reject) => {
-                // Ensure previous message handlers are cleared to avoid race conditions
-                patternWorker.onmessage = (e) => {
-                    if (e.data && e.data.type === 'result') {
-                        resolve(e.data.quantities);
-                    } else if (e.data && e.data.type === 'log') {
-                         // Handle logs from worker here if needed, or in the main worker.onmessage handler
-                         GM_log("Pack Filler Pro Worker Log (from fillPacks):", ...e.data.data);
-                    }
-                };
-                patternWorker.onerror = (error) => {
-                    GM_log("Pack Filler Pro: Web Worker error during calculation:", error);
-                    // On worker error, we will fall back to main thread calculation
-                    reject(error); // Reject the promise to trigger the catch block
-                };
-                // Post message to worker with necessary data
-                patternWorker.postMessage({
-                    strategy: patternType, // Should be 'perlin' here
-                    count: totalPacksToFill,
-                    config: { // Pass relevant config for the worker
-                         noiseSeed: config.noiseSeed,
-                         patternScale: config.patternScale,
-                         patternIntensity: config.patternIntensity,
-                         lastMinQty: config.lastMinQty,
-                         lastMaxQty: config.lastMaxQty,
-                         maxTotalAmount: config.maxTotalAmount,
-                         // fillEmptyOnly is handled on main thread
-                    }
-                });
-            });
-
-            // If worker succeeded, calculate total copies added
-            if (quantitiesToApply.length > 0) {
-                 currentTotal = quantitiesToApply.reduce((sum, qty) => sum + qty, 0);
-                 if (useMaxTotal && currentTotal >= maxTotalAmount) maxTotalHit = true;
-            }
-            GM_log("Pack Filler Pro: Quantities received from worker.");
-
-            // If worker was used successfully, we skip the main thread calculation loop below.
-
-        } catch (error) {
-            GM_log("Pack Filler Pro: Worker calculation failed, proceeding with main thread fallback.", error);
-            // Worker failed, quantitiesToApply is still empty.
-            // calculationStrategy is already set to the fallback (Perlin fallback or default random).
-            // Proceed to the main thread calculation block below.
-            quantitiesToApply = []; // Ensure it's empty
-            currentTotal = 0; // Reset total
-            maxTotalHit = false; // Reset flag
+        // 2. Get Inputs & Determine Targets
+        const allInputs = getPackInputs();
+        if (allInputs.length === 0) {
+            if (!isAutoFill) SWAL_ALERT('No Inputs', 'No visible pack inputs found on the page.', 'warning', config);
+            GM_log("Fill operation aborted: No visible pack inputs found.");
+            return;
         }
+
+        // Determine which inputs might be filled based on mode/count
+        const potentialInputsToFill = determineTargetInputs(allInputs, config);
+        const targetedCount = potentialInputsToFill.length;
+
+        if (targetedCount === 0) {
+            const modeDesc = config.lastMode === 'fixed' || config.lastMode === 'max' ? `Mode (${config.lastMode}) and Count (${config.lastCount})` : `Pattern Type (${config.patternType})`;
+            if (!isAutoFill) SWAL_ALERT('No Targets', `No packs targeted based on current ${modeDesc}.`, 'info', config);
+            GM_log(`Fill operation aborted: No packs targeted. Mode/Pattern: ${config.patternType}, Count: ${config.lastCount}`);
+            return;
+        }
+
+        // 3. Handle Clear Option (Manual Only)
+        if (config.lastClear && !isAutoFill) {
+            clearAllInputs(); // Uses utility function
+        }
+
+        // 4. Filter by 'Fill Empty Only'
+        const fillEmptyOnly = config.fillEmptyOnly;
+        const inputsToActuallyFill = fillEmptyOnly
+            ? potentialInputsToFill.filter(el => !el.value || parseInt(el.value, 10) === 0)
+            : potentialInputsToFill;
+
+        const finalFillCount = inputsToActuallyFill.length;
+
+        if (finalFillCount === 0) {
+            const message = fillEmptyOnly
+                ? `No empty packs found among the ${targetedCount} targeted.`
+                : `All ${targetedCount} targeted packs already have a quantity.`;
+            if (!isAutoFill) SWAL_ALERT('No Action Needed', message, 'info', config);
+            GM_log(`Fill operation skipped: No packs needed filling. Targeted: ${targetedCount}, EmptyOnly: ${fillEmptyOnly}`);
+            return;
+        }
+
+        // 5. Calculate Quantities
+        const patternType = config.patternType;
+        const workerStrategies = ['simplex', 'gradient']; // Strategies handled by worker
+        const useWorker = workerStrategies.includes(patternType) && patternWorker;
+
+        if (useWorker) {
+            calculationSource = "Web Worker";
+            GM_log(`Attempting to calculate ${finalFillCount} quantities using worker strategy: ${patternType}`);
+            try {
+                // Prepare config subset for worker
+                const workerConfig = {
+                    lastMinQty: config.lastMinQty,
+                    lastMaxQty: config.lastMaxQty,
+                    patternScale: config.patternScale,
+                    patternIntensity: config.patternIntensity,
+                    noiseSeed: config.noiseSeed,
+                    maxTotalAmount: config.maxTotalAmount,
+                    maxQtyOverride: MAX_QTY // Send absolute max
+                };
+                const workerData = {
+                     strategy: patternType,
+                     count: finalFillCount, // Only calculate for inputs we will actually fill
+                     config: workerConfig
+                 };
+
+                // Call worker and wait for result
+                const result = await callWorker(workerData); // Uses promise wrapper
+                quantitiesToApply = result.quantities;
+                workerMetadata = result.metadata; // Store metadata { actualTotal, seedUsed }
+                calculationSource += ` (Seed: ${workerMetadata.seedUsed ?? 'N/A'})`;
+                 GM_log(`Worker calculation successful. Received ${quantitiesToApply.length} quantities.`);
+
+            } catch (workerError) {
+                 GM_log(`Worker calculation failed: ${workerError.message}. Falling back to main thread 'random' strategy.`);
+                 SWAL_TOAST(`Worker failed: ${workerError.message}. Using random quantities.`, 'warning', config);
+                 calculationSource = "Main Thread (Fallback)";
+                 // Fallback: Calculate using 'random' strategy on main thread
+                 const fallbackStrategy = getMainThreadStrategy('random');
+                 const useMaxTotal = config.maxTotalAmount > 0;
+                 let currentTotal = 0;
+                 quantitiesToApply = inputsToActuallyFill.map((input, index) => {
+                      let qty = fallbackStrategy(config, index, finalFillCount);
+                      qty = clamp(qty, config.lastMinQty, config.lastMaxQty); // Clamp result
+                       // Apply Max Total Limit on fallback
+                      if (useMaxTotal) {
+                           const remaining = config.maxTotalAmount - currentTotal;
+                           qty = Math.min(qty, Math.max(0, remaining));
+                      }
+                      currentTotal += qty;
+                      return qty;
+                 });
+                 workerMetadata = { actualTotal: currentTotal, seedUsed: null }; // Set fallback metadata
+            }
+
+        } else {
+            // Use Main Thread calculation
+            calculationSource = "Main Thread";
+            GM_log(`Calculating ${finalFillCount} quantities on main thread using strategy: ${patternType}`);
+            const strategyFn = getMainThreadStrategy(patternType);
+            const useMaxTotal = config.maxTotalAmount > 0;
+            let currentTotal = 0;
+
+            quantitiesToApply = inputsToActuallyFill.map((input, index) => {
+                let qty = strategyFn(config, index, finalFillCount);
+                // Clamp result according to main thread strategy rules (might be redundant if strategy clamps)
+                qty = clamp(qty, config.lastMinQty, config.lastMaxQty);
+                // Clamp against absolute MAX_QTY
+                qty = clamp(qty, 0, MAX_QTY);
+
+                // Apply Max Total Limit
+                if (useMaxTotal) {
+                     const remaining = config.maxTotalAmount - currentTotal;
+                     qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative
+                }
+                currentTotal += qty;
+                return qty;
+            });
+            workerMetadata = { actualTotal: currentTotal, seedUsed: null }; // Set metadata for consistency
+        }
+
+        // 6. Apply Quantities to DOM
+        if (quantitiesToApply.length > 0) {
+            // Use the simplified virtualUpdate (individual updates)
+            virtualUpdate(inputsToActuallyFill, quantitiesToApply);
+            GM_log(`Applied ${quantitiesToApply.length} quantities to inputs.`);
+        } else {
+             GM_log("No quantities were generated to apply.");
+             // Should not happen if finalFillCount > 0, but safety check
+        }
+
+
+        // 7. Generate and Show Feedback
+        // Only show detailed feedback for manual fills or if autofill did something
+        if (!isAutoFill || (isAutoFill && finalFillCount > 0)) {
+            generateFeedback(config, isAutoFill, calculationSource, targetedCount, allInputs.length, finalFillCount, workerMetadata);
+        }
+
+    } catch (error) {
+        GM_log(`Fill Error: ${error.message}`, error);
+        // Show sanitized error message to the user
+        SWAL_ALERT('Fill Error', sanitize(error.message), 'error', config);
+    }
+}
+
+
+/**
+ * Applies quantities to inputs one by one.
+ * @param {Array<HTMLInputElement>} inputs - The input elements to update.
+ * @param {Array<number>} quantities - The quantities to apply.
+ */
+function virtualUpdate(inputs, quantities) {
+    if (!inputs || !quantities || inputs.length !== quantities.length) {
+        GM_log("virtualUpdate: Input/quantity mismatch or invalid arrays.");
+        return;
+    }
+    inputs.forEach((input, i) => {
+        // Clamping happens during calculation now, no need to reclamp here
+        updateInput(input, quantities[i]); // Uses utility function
+    });
+}
+
+
+/**
+ * Generates the feedback summary HTML and displays it.
+ */
+function generateFeedback(config, isAutoFill, calculationSource, targetedCount, availableCount, filledCount, metadata) {
+    let feedbackModeDesc = `Type: ${sanitize(config.patternType)}`;
+    let feedbackQuantityDesc = "";
+    let seedInfo = "";
+
+    // Describe quantity range/rules
+    switch(config.patternType) {
+        case 'fixed':
+        case 'unlimited':
+             feedbackQuantityDesc = `${config.lastFixedQty} copies per pack.`;
+             break;
+        case 'max':
+        case 'random':
+        case 'alternating':
+        case 'simplex':
+        case 'gradient':
+             feedbackQuantityDesc = `Copies between ${config.lastMinQty} and ${config.lastMaxQty}.`;
+             break;
+        default:
+             feedbackQuantityDesc = "Quantity rules applied.";
     }
 
-    // If quantities were NOT calculated by the worker (either worker failed/unavailable or not Perlin)
-    // AND a valid main thread strategy function was determined
-    // This block also handles non-Perlin patterns directly.
-    if (quantitiesToApply.length === 0 && typeof calculationStrategy === 'function') {
-         GM_log(`Pack Filler Pro: Calculating quantities on main thread using strategy: ${patternType === 'perlin' ? 'Perlin Fallback' : patternType}.`);
-         inputsToActuallyFill.forEach((input, index) => {
-              let qty = calculationStrategy(config, index, totalPacksToFill);
-              // Apply max total limit on main thread
-              if (useMaxTotal) {
-                   const remaining = maxTotalAmount - currentTotal;
-                   qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
-                   if (currentTotal + qty >= maxTotalAmount) maxTotalHit = true;
-              }
-              quantitiesToApply.push(qty);
-              currentTotal += qty;
-         });
-    } else if (quantitiesToApply.length === 0) {
-         // This case should ideally not happen if getFillStrategy always returns a function,
-         // but it's a safeguard.
-         GM_log("Pack Filler Pro: No quantities calculated and no valid main thread strategy found.");
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', 'Calculation failed. No quantities generated.', 'error', config);
-         return; // Abort if no quantities were generated
+    // Add pattern specific details
+    if (config.patternType === 'simplex' || config.patternType === 'gradient') {
+         feedbackQuantityDesc += ` Scale: ${config.patternScale}, Intensity: ${config.patternIntensity}.`;
+    }
+    if (config.patternType === 'simplex' && metadata && metadata.seedUsed !== null) {
+         seedInfo = `<br><strong>Seed Used:</strong> ${sanitize(metadata.seedUsed)}`;
     }
 
+    const clearStatus = config.lastClear && !isAutoFill ? "<br>- Inputs Cleared First" : "";
+    const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
+    const emptyOnlyStatus = config.fillEmptyOnly ? "<br>- Only Empty Inputs Filled" : "";
+    const maxTotalHit = config.maxTotalAmount > 0 && metadata && metadata.actualTotal >= config.maxTotalAmount;
+    const maxTotalStatus = config.maxTotalAmount > 0 ? `<br>- Max Total Limit: ${config.maxTotalAmount} ${maxTotalHit ? '(Reached)' : ''}` : '';
+    const totalAdded = metadata ? metadata.actualTotal : 'N/A';
+    const averagePerFilled = filledCount > 0 && typeof totalAdded === 'number' ? (totalAdded / filledCount).toFixed(2) : 'N/A';
 
-    // --- Apply Quantities to DOM ---
-    if (quantitiesToApply.length > 0) {
-        // Use the batch update function
-        // Pass the original inputsToActuallyFill and the calculated quantities
-        virtualUpdate(inputsToActuallyFill, quantitiesToApply);
-    }
+    let summaryHtml = `
+         <p><strong>Operation Details:</strong>${clearStatus}${autoFillStatus}${emptyOnlyStatus}${maxTotalStatus}</p>
+         <p><strong>Fill ${feedbackModeDesc}</strong></p>
+         <p><strong>Calculation Source:</strong> ${sanitize(calculationSource)}${seedInfo}</p>
+         <p><strong>Targeted Packs:</strong> ${targetedCount} / ${availableCount} visible</p>
+         <p><strong>Packs Actually Filled:</strong> ${filledCount}</p>
+         <p><strong>Quantity Rule:</strong> ${feedbackQuantityDesc}</p>
+         <p><strong>Total Copies Added:</strong> ${totalAdded}</p>
+         <p><strong>Average Copies per Filled Pack:</strong> ${averagePerFilled}</p>
+     `;
 
+     GM_log(`Pack Filler Pro: Fill complete. ${summaryHtml.replace(/<br.*?>/g, '; ').replace(/<.*?>/g, '').replace(/\n\s*/g, ' ')}`);
 
-     // --- DETAILED FEEDBACK GENERATION (SweetAlert2 Modal/Toast) ---
-     // Only show modal/toast for manual fills or if autofill resulted in actual fills
-     if (!isAutoFill || (isAutoFill && filledCount > 0)) {
-
-         let feedbackModeDesc = "";
-         let feedbackQuantityDesc = "";
-
-         if (patternType && patternType !== 'random') {
-             feedbackModeDesc = `Pattern Mode: ${patternType.charAt(0).toUpperCase() + patternType.slice(1)}`;
-             feedbackQuantityDesc = `Pattern applied with scale ${config.patternScale} and intensity ${config.patternIntensity}.`;
-             if (patternType === 'perlin') {
-                 feedbackQuantityDesc += ` Seed: ${config.noiseSeed === '' ? 'Random' : config.noiseSeed}.`;
-             }
-         } else {
-             switch (mode) {
-                 case 'fixed':
-                     feedbackModeDesc = `Fixed Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                     feedbackQuantityDesc = `${fixedQty} copies per pack.`;
-                     break;
-                 case 'max':
-                      feedbackModeDesc = `Random Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                      feedbackQuantityDesc = `Random copies (${minQty}-${maxQty}) per pack.`;
-                      break;
-                 case 'unlimited':
-                     feedbackModeDesc = `All Visible Packs Mode`;
-                     feedbackQuantityDesc = `${fixedQty} copies per pack.`;
-                     break;
-                 default:
-                     feedbackModeDesc = `Mode: ${mode}`;
-                     feedbackQuantityDesc = `Quantity chosen per pack.`;
-             }
-         }
-
-
-         const clearStatus = clear && !isAutoFill ? "<br>- Inputs Cleared First" : "";
-         const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
-         const emptyOnlyStatus = fillEmptyOnly ? "<br>- Only Empty Inputs Filled" : "";
-         const maxTotalStatus = useMaxTotal && maxTotalHit ? `<br>- Max Total Limit (${maxTotalAmount}) Reached` : '';
-
-
-         const averagePerFilled = filledCount > 0 ? (currentTotal / filledCount).toFixed(2) : 'N/A';
-
-         let summaryHtml = `
-              <p><strong>Operation Details:</strong>${clearStatus}${autoFillStatus}${emptyOnlyStatus}${maxTotalStatus}</p>
-              <p><strong>Fill Mode:</strong> ${feedbackModeDesc}</p>
-              <p><strong>Targeted Packs:</strong> ${targetedCount} / ${availablePacks} visible</p>
-              <p><strong>Packs Actually Filled:</strong> ${filledCount}</p>
-              <p><strong>Quantity Rule:</strong> ${feedbackQuantityDesc}</p>
-              <p><strong>Total Copies Added:</strong> ${currentTotal}</p>
-              <p><strong>Average Copies per Filled Pack:</strong> ${averagePerFilled}</p>
-          `;
-
-          GM_log(`Pack Filler Pro: Fill complete. ${summaryHtml.replace(/<br>- /g, '; ').replace(/<.*?>/g, '').replace(/\n/g, ' ')}`);
-
-
-          if (isAutoFill) {
-              SWAL_TOAST(`Auto-filled ${filledCount} packs (Total: ${currentTotal})`, 'success', config); // Pass config to SWAL
-          } else {
-              SWAL_ALERT('Fill Summary', summaryHtml, 'success', config); // Pass config to SWAL
-          }
+     if (isAutoFill) {
+         SWAL_TOAST(`Auto-filled ${filledCount} packs (Total: ${totalAdded})`, 'success', config);
+     } else {
+         SWAL_ALERT('Fill Summary', summaryHtml, 'success', config);
      }
- }
+}
 
-// The functions calculateFillCount, chooseQuantity, distribute, fillPacks,
-// FillStrategies, getFillStrategy, and virtualUpdate are made available
-// to the main script's scope via @require.
-
+// Make functions available via @require if this file is used as a module
+// For this script structure, they become globally available within the IIFE.
+// Explicitly list functions intended for external use if modularizing further:
+// export { fillPacks, setupWorkerMessageHandler }; // Example if using modules
