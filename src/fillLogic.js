@@ -6,7 +6,7 @@
 
 // It assumes the following are available in the main script's scope via @require:
 // - constants from constants.js (MAX_QTY, SELECTOR, etc.)
-// - functions from domUtils.js (getPackInputs, clamp, updateInput, clearAllInputs, sanitize)
+// - functions from domUtils.js (getPackInputs, clamp, updateInput, clearAllInputs, sanitize) <--- Uses clamp from here
 // - functions from swalHelpers.js (SWAL_ALERT, SWAL_TOAST)
 // - functions from configManager.js (validateFillConfig)
 // - GM_log function
@@ -90,6 +90,25 @@ function generateSeed(seedInput) {
     const randomSeed = Math.floor(Math.random() * 2**32); // Use a large range for the seed
     GM_log(`Pack Filler Pro: Generating random seed: ${randomSeed}`);
     return randomSeed;
+}
+
+// Helper to choose a random quantity within the configured range
+// Assumes MAX_QTY from constants.js and clamp from domUtils.js are available.
+function chooseQuantity(config) {
+    // Assumes clamp from domUtils.js is available via @require
+    if (typeof clamp !== 'function') {
+         GM_log("Pack Filler Pro: chooseQuantity dependencies (clamp) missing. Cannot determine quantity.");
+         return 0;
+    }
+    // Uses MAX_QTY from src/constants.js
+    const maxQty = typeof MAX_QTY !== 'undefined' ? MAX_QTY : 99; // Fallback MAX_QTY
+    const min = clamp(config.lastMinQty, 0, maxQty);
+    const max = clamp(config.lastMaxQty, 0, maxQty);
+    if (min > max) {
+         GM_log("Pack Filler Pro: chooseQuantity called with min > max, returning min.", {min: min, max: max});
+         return min; // Return min if range is invalid (should be prevented by validation)
+    }
+    return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 
@@ -414,14 +433,15 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
 
     // Check critical dependencies before starting core logic
      if (typeof getPackInputs !== 'function' || typeof validateFillConfig !== 'function' || typeof clearAllInputs !== 'function' ||
-         typeof virtualUpdate !== 'function' || typeof generateFeedback !== 'function' || typeof SWAL_ALERT !== 'function' ||
-         typeof SWAL_TOAST !== 'function' || typeof calculateQuantitiesMainThread !== 'function' || typeof clamp !== 'function' ||
+         typeof virtualUpdate !== 'function' || typeof generateFeedback !== 'function' || typeof SWAL_ALERT === 'undefined' || // SWAL_ALERT must be defined
+         typeof SWAL_TOAST === 'undefined' || typeof calculateQuantitiesMainThread !== 'function' || typeof clamp !== 'function' ||
          typeof sanitize !== 'function' || typeof MAX_QTY === 'undefined' || typeof DEFAULT_CONFIG === 'undefined') {
 
           const errorMessage = "fillPacks critical dependencies missing. Aborting fill operation.";
           GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
            // Use fallback alert if SWAL_ALERT is missing, sanitize might also be missing
            const fallbackMsg = `Pack Filler Pro Error: ${errorMessage}. Check script installation or dependencies.`;
+           // Attempt to use SWAL_ALERT if available, otherwise fallback to alert
            if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Fill Error', sanitize(errorMessage), 'error', config);
            else alert(fallbackMsg);
           throw new Error(errorMessage); // Abort the async function
@@ -443,7 +463,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
         GM_log("Pack Filler Pro: fillPacks Step 3: Getting pack inputs.");
         // Assumes getPackInputs from domUtils.js is accessible and returns an array (possibly empty)
         const allInputs = getPackInputs();
-        const availablePacks = allInputs.length;
+        const availablePacks = Array.isArray(allInputs) ? allInputs.length : 0; // Ensure availablePacks is a number
         GM_log(`Pack Filler Pro: fillPacks Step 4: Found ${availablePacks} visible inputs.`);
 
 
@@ -467,7 +487,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                const safeFillCount = typeof fillCount === 'number' && !isNaN(fillCount) && fillCount >= 0 ? fillCount : 0;
               potentialInputsToFill = allInputs.slice(0, safeFillCount); // Target the first 'fillCount' inputs
          }
-        const targetedCount = potentialInputsToFill.length;
+        const targetedCount = Array.isArray(potentialInputsToFill) ? potentialInputsToFill.length : 0; // Ensure targetedCount is a number
         GM_log(`Pack Filler Pro: fillPacks Step 7: Targeted ${targetedCount} inputs based on mode/count.`);
 
 
@@ -512,7 +532,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
             : potentialInputsToFill; // If not fillEmptyOnly or not an array, use the potential list
 
 
-        const filledCount = Array.isArray(inputsToActuallyFill) ? inputsToActuallyFill.length : 0;
+        const filledCount = Array.isArray(inputsToActuallyFill) ? inputsToActuallyFill.length : 0; // Ensure filledCount is a number
         GM_log(`Pack Filler Pro: fillPacks Step 13: After filtering, ${filledCount} inputs will be filled.`);
 
 
@@ -629,12 +649,13 @@ async function fillRandomPackInput(config) { // Accept config here and make asyn
 
      // Check critical dependencies before starting
       if (typeof getPackInputs !== 'function' || typeof validateFillConfig !== 'function' || typeof updateInput !== 'function' ||
-          typeof SWAL_ALERT !== 'function' || typeof SWAL_TOAST !== 'function' || typeof MainThreadFillStrategies !== 'object' ||
+          typeof SWAL_ALERT === 'undefined' || typeof SWAL_TOAST === 'undefined' || typeof MainThreadFillStrategies === 'undefined' || // SWAL_ALERT, SWAL_TOAST, Strategies must be defined
           typeof clamp !== 'function' || typeof sanitize !== 'function' || typeof MAX_QTY === 'undefined') {
 
            const errorMessage = "fillRandomPackInput critical dependencies missing. Aborting.";
            GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
             const fallbackMsg = `Pack Filler Pro Error: ${errorMessage}. Check script installation or dependencies.`;
+           // Attempt to use SWAL_ALERT if available, otherwise fallback to alert
            if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Fill Random Error', sanitize(errorMessage), 'error', config);
            else alert(fallbackMsg);
            return; // Abort the async function
@@ -702,7 +723,7 @@ async function fillRandomPackInput(config) { // Accept config here and make asyn
              // Assumes generateSeed is available in this file's scope
              const actualSeed = typeof generateSeed === 'function' ? generateSeed(config.noiseSeed) : config.noiseSeed; // Fallback if generateSeed is missing
              metadata.seedUsed = actualSeed;
-             // Call Perlin strategy, passing the seed and faking total/index for a single pack (total 1, index 0)
+             // Call Perlin strategy, passing the seed and faking total/index for a single pack
              // The perlin strategy function now returns { quantity, seed }
              // Ensure perlinNoise and lerp are available for the strategy call
              if (typeof perlinNoise === 'function' && typeof lerp === 'function') {
@@ -870,7 +891,7 @@ function generateFeedback(config, isAutoFill, calculationSource, targetedCount, 
 
      if (isAutoFill) {
          // Use a toast for auto-fill, less intrusive
-         SWAL_TOAST(`Auto-filled ${filledCount} packs (Total: ${totalCopiesAdded})`, 'success', config);
+         SWAL_TOAST(sanitize(`Auto-filled ${filledCount} packs (Total: ${totalCopiesAdded})`), 'success', config); // Sanitize toast title
      } else {
          // Use a modal for manual fills
          SWAL_ALERT('Fill Summary', sanitizedSummaryHtml, 'success', config); // Use sanitized HTML
