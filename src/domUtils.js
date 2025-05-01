@@ -109,5 +109,23 @@ function clearAllInputs() {
     }
 }
 
-// The functions getPackInputs, clamp, updateInput, and clearAllInputs are made available
+// Basic HTML sanitization helper
+// Prevents simple XSS by escaping HTML entities. Not a complete solution for all cases.
+// Assumes this function is used before inserting user-provided strings into HTML (like in Swal).
+/**
+ * Sanitizes a string to prevent basic HTML injection.
+ * @param {string} str - The string to sanitize.
+ * @returns {string} The sanitized string. Returns empty string for non-string inputs.
+ */
+function sanitize(str) {
+    if (typeof str !== 'string') {
+        return '';
+    }
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+
+// The functions getPackInputs, clamp, updateInput, clearAllInputs, and sanitize are made available
 // to the main script's scope via @require.
