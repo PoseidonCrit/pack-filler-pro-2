@@ -6,715 +6,424 @@
 // - $ from cash-dom
 // - panelElement, toggleButtonElement, panelSimpleBarInstance (variables populated in main script)
 // - functions from fillLogic.js (fillPacks, fillRandomPackInput)
-// - functions from domUtils.js (clearAllInputs, getPackInputs, clamp)
-// - functions from configManager.js (debouncedSaveConfig)
+// - functions from domUtils.js (clearAllInputs, getPackInputs, clamp, sanitize)
+// - functions from configManager.js (debouncedSaveConfig, saveConfig, validateFillConfig) // Added validateFillConfig, saveConfig
 // - functions from swalHelpers.js (SWAL_ALERT, SWAL_TOAST)
 // - constants from constants.js (SELECTOR, FULL_PAGE_CHECKBOX_ID, etc.)
 // - GM_log function
 // - MutationObserver API
 // - window.Swal (SweetAlert2 instance)
+// - DEFAULT_CONFIG constant
 
-/* --- UI Event Binding --- */
+/* --- UI State Management --- */
+
 /**
- * Binds event listeners to the UI panel elements.
- * Assumes necessary DOM elements and functions from other modules are available in scope.
- * Includes robustness checks for dependencies.
+ * Loads configuration values into the UI elements.
+ * Assumes config object and UI element IDs (from constants.js) are available.
+ * Assumes $ from cash-dom is available.
  * @param {object} config - The script's configuration object.
  */
-function bindPanelEvents(config) { // Accept config here
-    GM_log("Pack Filler Pro: bindPanelEvents started.");
-
-    // Check if critical DOM elements and core functions are available before binding events
-    if (typeof $ === 'undefined' || !panelElement || !toggleButtonElement ||
-        typeof fillPacks !== 'function' || typeof clearAllInputs !== 'function' ||
-        typeof updateConfigFromUI !== 'function' || typeof debouncedSaveConfig !== 'function' ||
-        typeof updatePanelModeDisplay !== 'function' || typeof updatePanelVisibility !== 'function' ||
-        typeof applyDarkMode !== 'function' || typeof getPackInputs !== 'function' ||
-        typeof SELECTOR === 'undefined' || typeof updateUIFromConfig === 'undefined' || // Added check for updateUIFromConfig
-        typeof sanitize === 'undefined') // Added check for sanitize
-        {
-
-        const errorMessage = "Critical UI binding dependencies missing. UI events will not be bound.";
-        GM_log(`Pack Filler Pro: ERROR - ${errorMessage}`);
-        // Use fallback alert if SWAL_ALERT is not available
-        if (typeof SWAL_ALERT === 'function') SWAL_ALERT('UI Binding Error', errorMessage, 'error', config);
-        else alert(`Pack Filler Pro Error: ${errorMessage}`);
-        return; // Abort binding if critical dependencies are missing
+function loadConfigIntoUI(config) {
+    GM_log("Pack Filler Pro: Loading config into UI.");
+    // Check critical dependencies
+    if (typeof $ === 'undefined' || typeof config !== 'object' || config === null) {
+         GM_log("Pack Filler Pro: loadConfigIntoUI dependencies ($ or config) missing. Aborting.");
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler Pro: Cannot load config into UI due to missing dependencies.");
+         return;
     }
 
+    try {
+         // Use constants for IDs (assumed available via @require)
+         // Use $ from cash-dom (assumed available via @require)
+        $('#pfp-mode').val(config.lastMode || DEFAULT_CONFIG.lastMode); // Use default if undefined
+        $('#pfp-count').val(config.lastCount || DEFAULT_CONFIG.lastCount);
+        $('#pfp-fixed').val(config.lastFixedQty || DEFAULT_CONFIG.lastFixedQty);
+        $('#pfp-min').val(config.lastMinQty || DEFAULT_CONFIG.lastMinQty);
+        $('#pfp-max').val(config.lastMaxQty || DEFAULT_CONFIG.lastMaxQty);
+        $('#pfp-clear').prop('checked', config.lastClear || DEFAULT_CONFIG.lastClear);
+        $(`#${FULL_PAGE_CHECKBOX_ID}`).prop('checked', config.loadFullPage || DEFAULT_CONFIG.loadFullPage);
+        $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked', config.isDarkMode || DEFAULT_CONFIG.isDarkMode);
+        $(`#${MAX_TOTAL_INPUT_ID}`).val(config.maxTotalAmount || DEFAULT_CONFIG.maxTotalAmount);
+        $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked', config.autoFillLoaded || DEFAULT_CONFIG.autoFillLoaded);
+        $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked', config.fillEmptyOnly || DEFAULT_CONFIG.fillEmptyOnly);
+        $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked', config.scrollToBottomAfterLoad || DEFAULT_CONFIG.scrollToBottomAfterLoad);
+        $(`#${PATTERN_TYPE_SELECT_ID}`).val(config.patternType || DEFAULT_CONFIG.patternType);
+        $(`#${NOISE_SEED_INPUT_ID}`).val(config.noiseSeed || DEFAULT_CONFIG.noiseSeed);
 
-    // Fill Packs Button
-    // Assumes fillPacks, updateConfigFromUI, debouncedSaveConfig are available
-    $('#pfp-run').on('click', async () => { // Make async to await fillPacks
-        GM_log("Pack Filler Pro: 'Fill Packs' button clicked.");
-        try {
-            // Ensure config is updated from UI before filling
-            updateConfigFromUI(config); // Pass config
-            debouncedSaveConfig(config); // Save config immediately on manual trigger
+        // Pattern range inputs (scale and intensity)
+        // Ensure values are numbers before setting
+        const patternScale = typeof config.patternScale === 'number' ? config.patternScale : DEFAULT_CONFIG.patternScale;
+        const patternIntensity = typeof config.patternIntensity === 'number' ? config.patternIntensity : DEFAULT_CONFIG.patternIntensity;
 
-            // Call the fill logic - pass config
-            await fillPacks(config, false); // Pass config and isAutoFill=false, await the async function
+        $(`#${PATTERN_SCALE_INPUT_ID}`).val(patternScale);
+        $(`#${PATTERN_INTENSITY_INPUT_ID}`).val(patternIntensity * 100); // Intensity is 0-1 in config, 0-100 in UI
 
-        } catch (error) {
-            GM_log("Pack Filler Pro: Error during 'Fill Packs' click handler:", error);
-            // fillPacks should handle its own error feedback via SWAL, but defensive log here
-        }
-    });
-
-
-    // Clear All Button
-    // Assumes clearAllInputs is available
-    $('#pfp-clear-btn').on('click', () => {
-        GM_log("Pack Filler Pro: 'Clear All' button clicked.");
-        try {
-             // Clear all inputs - clearAllInputs handles its own feedback
-             clearAllInputs();
-             // Update config state after clearing if needed (config.lastClear doesn't change here)
-             // No config update needed for just clearing inputs.
-        } catch (error) {
-             GM_log("Pack Filler Pro: Error during 'Clear All' click handler:", error);
-             // clearAllInputs should handle its own error feedback via SWAL
-        }
-
-    });
+        // Update range input value displays
+        $(`#pfp-pattern-scale-value`).text(patternScale);
+        $(`#pfp-pattern-intensity-value`).text(Math.round(patternIntensity * 100));
 
 
-    // Toggle Button
-    // Assumes updatePanelVisibility, updateConfigFromUI, debouncedSaveConfig, panelElement, toggleButtonElement are available
-    $(toggleButtonElement).on('click', () => {
-        GM_log("Pack Filler Pro: 'Toggle Panel' button clicked.");
-        // Toggle panel visibility state in config
-        config.panelVisible = !config.panelVisible;
-        // Update UI visibility based on new state
-        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config
-        // Save updated config
-        debouncedSaveConfig(config); // Pass config
-    });
-
-    // Close Button (inside panel header)
-    // Assumes updatePanelVisibility, updateConfigFromUI, debouncedSaveConfig, panelElement are available
-    $(panelElement).find('.pfp-close').on('click', () => {
-        GM_log("Pack Filler Pro: 'Close Panel' button clicked.");
-        // Set panel visibility state to false in config
-        config.panelVisible = false;
-        // Update UI visibility
-        updatePanelVisibility(config, config.panelVisible, config.panelPos); // Pass config
-        // Save updated config
-        debouncedSaveConfig(config); // Pass config
-    });
-
-    // Panel Dragging (Header)
-    // Assumes panelElement, toggleButtonElement are available
-    // Uses cash-dom's .on() which supports event delegation if needed, but direct on header is fine
-    const header = $(panelElement).find('.pfp-header')[0]; // Get the native DOM element
-    if (header) {
-        let isDragging = false;
-        let offsetX, offsetY;
-
-        $(header).on('mousedown', (e) => {
-            // Only start drag if it's the left mouse button and not clicking the close button
-            if (e.button === 0 && !e.target.classList.contains('pfp-close')) {
-                isDragging = true;
-                // Calculate offset relative to the panel's current position
-                const panelRect = panelElement.getBoundingClientRect();
-                offsetX = e.clientX - panelRect.left;
-                offsetY = e.clientY - panelRect.top;
-
-                // Prevent text selection during drag
-                $(panelElement).addClass('pfp-dragging');
-                // Add dragging class to body to prevent text selection globally
-                 $('body').addClass('pfp-body-dragging');
-
-                // Set cursor style directly on body while dragging
-                document.body.style.cursor = 'grabbing';
-            }
-        });
-
-        $(document).on('mousemove', (e) => {
-            if (isDragging) {
-                // Calculate new panel position
-                let newLeft = e.clientX - offsetX;
-                let newTop = e.clientY - offsetY;
-
-                // Optional: Clamp panel position to viewport bounds
-                const panelRect = panelElement.getBoundingClientRect();
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-
-                newLeft = Math.max(0, Math.min(newLeft, viewportWidth - panelRect.width));
-                newTop = Math.max(0, Math.min(newTop, viewportHeight - panelRect.height));
+        // Page Random Clicker Count
+        $(`#${CLICK_PAGE_RANDOM_COUNT_ID}`).val(config.clickPageRandomCount || DEFAULT_CONFIG.clickPageRandomCount);
 
 
-                // Update panel position
-                panelElement.style.left = `${newLeft}px`;
-                panelElement.style.top = `${newTop}px`;
-                panelElement.style.right = 'auto'; // Ensure right/bottom are auto when using top/left
-                panelElement.style.bottom = 'auto';
-
-                // Update config position (using top/left)
-                config.panelPos = { top: `${newTop}px`, left: `${newLeft}px`, right: 'auto', bottom: 'auto' };
-                debouncedSaveConfig(config); // Pass config
-
-                // Prevent default text selection/dragging behavior
-                e.preventDefault();
-            }
-        });
-
-        $(document).on('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                // Remove dragging classes and reset cursor
-                $(panelElement).removeClass('pfp-dragging');
-                 $('body').removeClass('pfp-body-dragging');
-                 document.body.style.cursor = '';
-
-                // The debouncedSaveConfig would have already been called during mousemove
-                // but calling it one last time on mouseup ensures the final position is saved reliably.
-                 debouncedSaveConfig(config); // Pass config
-            }
-        });
-
-         GM_log("Pack Filler Pro: Panel dragging events bound.");
-
-    } else {
-         GM_log("Pack Filler Pro: Panel header element not found. Dragging not enabled.");
+        GM_log("Pack Filler Pro: Config loaded into UI successfully.");
+    } catch (e) {
+        GM_log(`Pack Filler Pro: ERROR - Failed to load config into UI: ${e.message}`, e);
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler Pro: Cannot load config into UI due to error during application.");
     }
-
-
-    // Bind change/input events to form elements for config updates
-    // Assumes updateConfigFromUI and debouncedSaveConfig are available
-    $('#pfp-mode, #pfp-count, #pfp-fixed, #pfp-min, #pfp-max, #' + MAX_TOTAL_INPUT_ID + ', #' + FULL_PAGE_CHECKBOX_ID + ', #' + DARK_MODE_CHECKBOX_ID + ', #' + AUTO_FILL_LOADED_CHECKBOX_ID + ', #' + FILL_EMPTY_ONLY_CHECKBOX_ID + ', #' + SCROLL_TO_BOTTOM_CHECKBOX_ID + ', #' + PATTERN_TYPE_SELECT_ID + ', #' + NOISE_SEED_INPUT_ID + ', #' + PATTERN_SCALE_INPUT_ID + ', #' + PATTERN_INTENSITY_INPUT_ID + ', #' + CLICK_PAGE_RANDOM_COUNT_ID).on('change input', (e) => {
-        // Input event for text/number/range, change event for select/checkbox
-        // GM_log(`Pack Filler Pro: Config input changed: ${e.target.id}`); // Too chatty
-        // Update config object based on current UI state
-        updateConfigFromUI(config); // Pass config
-        // Save config after a short delay
-        debouncedSaveConfig(config); // Pass config
-
-        // Special handling for pattern type select change
-        if (e.target.id === PATTERN_TYPE_SELECT_ID) {
-             updatePatternParamsVisibility(config.patternType); // Update which pattern parameters are visible
-        }
-         // Special handling for Dark Mode checkbox
-         if (e.target.id === DARK_MODE_CHECKBOX_ID) {
-              applyDarkMode(config, config.isDarkMode); // Apply dark mode class immediately
-         }
-
-         // Special handling for Fill Mode select change to toggle quantity inputs
-         if (e.target.id === 'pfp-mode') {
-              updateQuantityInputVisibility(config.lastMode); // Toggle fixed vs range inputs
-         }
-
-    });
-
-    // Bind input event for range sliders to update value display span
-    // Assumes PATTERN_SCALE_INPUT_ID, PATTERN_INTENSITY_INPUT_ID, $ are available
-    const scaleInput = $('#' + PATTERN_SCALE_INPUT_ID);
-    const intensityInput = $('#' + PATTERN_INTENSITY_INPUT_ID);
-    const scaleValueSpan = $('#pfp-pattern-scale-value');
-    const intensityValueSpan = $('#pfp-pattern-intensity-value');
-
-    if (scaleInput.length && scaleValueSpan.length) {
-        scaleInput.on('input', () => {
-            scaleValueSpan.text(scaleInput.val());
-        });
-        // Trigger once to set initial value display
-         scaleValueSpan.text(scaleInput.val());
-    }
-     if (intensityInput.length && intensityValueSpan.length) {
-        intensityInput.on('input', () => {
-             // Convert 0-100 range to 0.0-1.0 for display and config
-            const value = parseFloat(intensityInput.val()) / 100.0;
-            intensityValueSpan.text(value.toFixed(2)); // Display with 2 decimal places
-        });
-        // Trigger once to set initial value display
-         const initialIntensityValue = parseFloat(intensityInput.val()) / 100.0;
-         intensityValueSpan.text(initialIntensityValue.toFixed(2));
-    }
-
-    // Bind event for "Fill 1 Random Pack" button
-    // Assumes fillRandomPackInput is available
-    $('#' + FILL_RANDOM_BTN_ID).on('click', async () => { // Make async to await fillRandomPackInput
-        GM_log("Pack Filler Pro: 'Fill 1 Random Pack' button clicked.");
-        try {
-            // Ensure config is updated from UI before filling
-            updateConfigFromUI(config); // Pass config
-            debouncedSaveConfig(config); // Save config immediately
-
-            // Call the random fill logic - pass config
-            await fillRandomPackInput(config); // Pass config and await
-
-        } catch (error) {
-            GM_log("Pack Filler Pro: Error during 'Fill 1 Random Pack' click handler:", error);
-            // fillRandomPackInput should handle its own error feedback via SWAL
-        }
-    });
-
-     // Bind event for "Click Page Random Button"
-     // Assumes CLICK_PAGE_RANDOM_BTN_ID, CLICK_PAGE_RANDOM_COUNT_ID, $, getPackInputs, SWAL_TOAST, sanitize are available
-     $('#' + CLICK_PAGE_RANDOM_BTN_ID).on('click', async () => {
-          GM_log("Pack Filler Pro: 'Click Page Random Button' clicked.");
-           try {
-               updateConfigFromUI(config); // Ensure config is updated for the count
-               debouncedSaveConfig(config); // Save config
-
-               const clickCount = config.clickPageRandomCount; // Use count from config
-
-               if (clickCount <= 0) {
-                    if (typeof SWAL_TOAST === 'function') SWAL_TOAST('Click Random', 'Click count must be at least 1.', 'warning', config);
-                     GM_log("Click Page Random aborted: Click count is not positive.");
-                    return;
-               }
-
-               // Find the actual page button (adjust selector as needed for the target site)
-               const pageRandomButton = $('button.pack-open-button:visible, a.pack-open-button:visible').filter((i, el) => {
-                   // Filter for buttons/links that look like the main "Open Random Pack" button
-                    const text = $(el).text().toLowerCase();
-                    return text.includes('open random pack'); // Example filtering
-               })[0]; // Get the first visible matching element
-
-               if (!pageRandomButton) {
-                    const errorMsg = "Could not find the page's 'Open Random Pack' button.";
-                     if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Click Random Error', sanitize(errorMsg), 'error', config);
-                     GM_log(`Pack Filler Pro: ERROR - ${errorMsg}`);
-                    return;
-               }
-
-               GM_log(`Pack Filler Pro: Clicking page's random button ${clickCount} time(s).`);
-
-               let clicksDone = 0;
-               const clickInterval = 50; // ms between clicks to simulate user, adjust if needed
-
-               async function performClick() {
-                   if (clicksDone < clickCount) {
-                        pageRandomButton.click(); // Simulate click
-                        clicksDone++;
-                        GM_log(`Pack Filler Pro: Clicked page random button (${clicksDone}/${clickCount}).`);
-                        // Add a small delay before the next click
-                        await new Promise(resolve => setTimeout(resolve, clickInterval));
-                        // Recursively call for the next click
-                        performClick();
-                   } else {
-                       // All clicks done
-                       if (typeof SWAL_TOAST === 'function') SWAL_TOAST(`Clicked page random button ${clickCount} time(s).`, 'success', config);
-                        GM_log("Pack Filler Pro: Finished clicking page random button.");
-                        // Re-check inputs and update count after clicks (optional, depends on if clicks add new inputs)
-                         if (typeof getPackInputs === 'function' && typeof $ === 'function' && typeof clamp === 'function') {
-                              const currentInputCount = getPackInputs().length;
-                              $('#pfp-count').attr('max', clamp(currentInputCount, 0, Infinity));
-                         }
-                   }
-               }
-
-               // Start the click sequence
-               performClick();
-
-
-           } catch (error) {
-                GM_log(`Pack Filler Pro: Error during 'Click Page Random Button' click handler: ${error.message}`, error);
-                 if (typeof SWAL_ALERT === 'function' && typeof sanitize === 'function') SWAL_ALERT('Click Random Error', sanitize(error.message), 'error', config);
-           }
-
-     });
-
-
-     // Initialize the visibility of quantity inputs based on current mode
-     updateQuantityInputVisibility(config.lastMode);
-     // Initialize the visibility of pattern parameters based on current pattern type
-     updatePatternParamsVisibility(config.patternType);
-
-
-    // MutationObserver to detect SweetAlert2 popups and apply dark mode class
-    // This ensures dynamically created Swal elements get the dark mode class if enabled.
-    // Assumes DARK_MODE_CHECKBOX_ID is defined and config is available.
-    // Also assumes window.Swal is available.
-    if (typeof window.Swal !== 'undefined' && typeof DARK_MODE_CHECKBOX_ID !== 'undefined') {
-        const swalObserver = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    // Check if the added node is a SweetAlert2 popup element
-                    // Swal popups have the class 'swal2-popup'
-                    if (node.classList && node.classList.contains('swal2-popup')) {
-                        GM_log("Pack Filler Pro: Detected new SweetAlert2 popup. Applying dark mode if enabled.");
-                        // Check the current dark mode state from config
-                        if (config.isDarkMode) {
-                            node.classList.add('dark-mode');
-                            // Also apply dark mode to the backdrop if it exists and is a direct sibling or parent's sibling
-                             const backdrop = node.parentElement ? node.parentElement.querySelector('.swal2-backdrop-show') : null;
-                             if (backdrop) {
-                                  backdrop.classList.add('dark-mode');
-                             }
-                        }
-                         // Note: We could also add observers to the popup itself if needed,
-                         // but applying the class on creation is usually sufficient with CSS variables.
-                    }
-                });
-            });
-        });
-
-        // Start observing the document body for added nodes (subtree includes children)
-        swalObserver.observe(document.body, { childList: true, subtree: true });
-        // Store the observer globally (or in a cleanup array) so it can be disconnected on unload
-        window._pfpSwalObserver = swalObserver; // Store on window for unload cleanup
-        GM_log("Pack Filler Pro: SweetAlert2 popup MutationObserver started.");
-
-    } else {
-         GM_log("Pack Filler Pro: Skipping SweetAlert2 popup MutationObserver setup (Swal or DARK_MODE_CHECKBOX_ID missing).");
-    }
-
-
-    GM_log("Pack Filler Pro: bindPanelEvents finished.");
 }
 
-
-/* --- UI Update Functions --- */
 /**
- * Updates the UI form elements to reflect the values in the config object.
- * Assumes $ from cash-dom and element IDs are available.
- * Assumes config object is available.
- * @param {object} config - The script's configuration object.
- */
-function loadConfigIntoUI(config) { // Accept config here
-    // Check for dependencies before updating UI
-    if (typeof $ === 'undefined' || typeof MAX_TOTAL_INPUT_ID === 'undefined' || typeof FULL_PAGE_CHECKBOX_ID === 'undefined' ||
-        typeof DARK_MODE_CHECKBOX_ID === 'undefined' || typeof AUTO_FILL_LOADED_CHECKBOX_ID === 'undefined' || typeof FILL_EMPTY_ONLY_CHECKBOX_ID === 'undefined' ||
-        typeof SCROLL_TO_BOTTOM_CHECKBOX_ID === 'undefined' || typeof PATTERN_TYPE_SELECT_ID === 'undefined' || typeof NOISE_SEED_INPUT_ID === 'undefined' ||
-        typeof PATTERN_SCALE_INPUT_ID === 'undefined' || typeof PATTERN_INTENSITY_INPUT_ID === 'undefined' || typeof CLICK_PAGE_RANDOM_COUNT_ID === 'undefined') {
-         GM_log("Pack Filler Pro: loadConfigIntoUI dependencies ($, IDs) missing. Cannot load config into UI.");
-         return; // Abort if dependencies are missing
-     }
-
-
-    // Load general settings
-    $('#pfp-mode').val(config.lastMode);
-    $('#pfp-count').val(config.lastCount);
-    $('#pfp-fixed').val(config.lastFixedQty);
-    $('#pfp-min').val(config.lastMinQty);
-    $('#pfp-max').val(config.lastMaxQty);
-    $('#' + MAX_TOTAL_INPUT_ID).val(config.maxTotalAmount);
-
-    // Load checkbox states
-    $('#pfp-clear').prop('checked', config.lastClear);
-    $('#' + FULL_PAGE_CHECKBOX_ID).prop('checked', config.loadFullPage);
-    $('#' + DARK_MODE_CHECKBOX_ID).prop('checked', config.isDarkMode);
-    $('#' + AUTO_FILL_LOADED_CHECKBOX_ID).prop('checked', config.autoFillLoaded);
-    $('#' + FILL_EMPTY_ONLY_CHECKBOX_ID).prop('checked', config.fillEmptyOnly);
-    $('#' + SCROLL_TO_BOTTOM_CHECKBOX_ID).prop('checked', config.scrollToBottomAfterLoad);
-
-    // Load pattern settings
-    $('#' + PATTERN_TYPE_SELECT_ID).val(config.patternType);
-    $('#' + NOISE_SEED_INPUT_ID).val(config.noiseSeed);
-    // Convert 0.0-1.0 intensity to 0-100 slider value
-     $('#' + PATTERN_INTENSITY_INPUT_ID).val(Math.round(config.patternIntensity * 100));
-     $('#' + PATTERN_SCALE_INPUT_ID).val(config.patternScale);
-    // Update range slider display spans immediately
-     $('#pfp-pattern-scale-value').text(config.patternScale);
-     $('#pfp-pattern-intensity-value').text(config.patternIntensity.toFixed(2)); // Display with 2 decimals
-
-    // Load Page Random Clicker setting
-     $('#' + CLICK_PAGE_RANDOM_COUNT_ID).val(config.clickPageRandomCount);
-
-
-    GM_log("Pack Filler Pro: Config loaded into UI.");
-}
-
-
-/**
- * Updates the config object based on the current state of the UI form elements.
- * Assumes $ from cash-dom and element IDs are available.
- * Assumes config object is available.
+ * Updates the configuration object from the current UI element values.
+ * Assumes config object and UI element IDs (from constants.js) are available.
+ * Assumes $ from cash-dom is available.
  * @param {object} config - The script's configuration object to update.
  */
-function updateConfigFromUI(config) { // Accept config here
-    // Check for dependencies before updating config
-     if (typeof $ === 'undefined' || typeof MAX_TOTAL_INPUT_ID === 'undefined' || typeof FULL_PAGE_CHECKBOX_ID === 'undefined' ||
-         typeof DARK_MODE_CHECKBOX_ID === 'undefined' || typeof AUTO_FILL_LOADED_CHECKBOX_ID === 'undefined' || typeof FILL_EMPTY_ONLY_CHECKBOX_ID === 'undefined' ||
-         typeof SCROLL_TO_BOTTOM_CHECKBOX_ID === 'undefined' || typeof PATTERN_TYPE_SELECT_ID === 'undefined' || typeof NOISE_SEED_INPUT_ID === 'undefined' ||
-         typeof PATTERN_SCALE_INPUT_ID === 'undefined' || typeof PATTERN_INTENSITY_INPUT_ID === 'undefined' || typeof CLICK_PAGE_RANDOM_COUNT_ID === 'undefined') {
-         GM_log("Pack Filler Pro: updateConfigFromUI dependencies ($, IDs) missing. Cannot update config from UI.");
-         return; // Abort if dependencies are missing
-     }
+function updateConfigFromUI(config) {
+    // Check critical dependencies
+    if (typeof $ === 'undefined' || typeof config !== 'object' || config === null) {
+         GM_log("Pack Filler Pro: updateConfigFromUI dependencies ($ or config) missing. Aborting.");
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler Pro: Cannot update config from UI due to missing dependencies.");
+         return;
+    }
 
-    // Update general settings - ensure conversion to number where appropriate
-    config.lastMode = $('#pfp-mode').val();
-    config.lastCount = parseInt($('#pfp-count').val(), 10) || 0;
-    config.lastFixedQty = parseInt($('#pfp-fixed').val(), 10) || 0;
-    config.lastMinQty = parseInt($('#pfp-min').val(), 10) || 0;
-    config.lastMaxQty = parseInt($('#pfp-max').val(), 10) || 0;
-    config.maxTotalAmount = parseInt($('#' + MAX_TOTAL_INPUT_ID).val(), 10) || 0;
+    try {
+        // Use constants for IDs (assumed available via @require)
+        // Use $ from cash-dom (assumed available via @require)
+        config.lastMode = $('#pfp-mode').val();
+        config.lastCount = parseInt($('#pfp-count').val(), 10) || 0; // Ensure integer
+        config.lastFixedQty = parseInt($('#pfp-fixed').val(), 10) || 0; // Ensure integer
+        config.lastMinQty = parseInt($('#pfp-min').val(), 10) || 0; // Ensure integer
+        config.lastMaxQty = parseInt($('#pfp-max').val(), 10) || 0; // Ensure integer
+        config.lastClear = $('#pfp-clear').prop('checked');
+        config.loadFullPage = $(`#${FULL_PAGE_CHECKBOX_ID}`).prop('checked');
+        config.isDarkMode = $(`#${DARK_MODE_CHECKBOX_ID}`).prop('checked');
+        config.maxTotalAmount = parseInt($(`#${MAX_TOTAL_INPUT_ID}`).val(), 10) || 0; // Ensure integer
+        config.autoFillLoaded = $(`#${AUTO_FILL_LOADED_CHECKBOX_ID}`).prop('checked');
+        config.fillEmptyOnly = $(`#${FILL_EMPTY_ONLY_CHECKBOX_ID}`).prop('checked');
+        config.scrollToBottomAfterLoad = $(`#${SCROLL_TO_BOTTOM_CHECKBOX_ID}`).prop('checked');
+        config.patternType = $(`#${PATTERN_TYPE_SELECT_ID}`).val();
 
-    // Update checkbox states
-    config.lastClear = $('#pfp-clear').prop('checked');
-    config.loadFullPage = $('#' + FULL_PAGE_CHECKBOX_ID).prop('checked');
-    config.isDarkMode = $('#' + DARK_MODE_CHECKBOX_ID).prop('checked');
-    config.autoFillLoaded = $('#' + AUTO_FILL_LOADED_CHECKBOX_ID).prop('checked');
-    config.fillEmptyOnly = $('#' + FILL_EMPTY_ONLY_CHECKBOX_ID).prop('checked');
-    config.scrollToBottomAfterLoad = $('#' + SCROLL_TO_BOTTOM_CHECKBOX_ID).prop('checked');
+        // Pattern range inputs (scale and intensity)
+        // Ensure values are numbers and convert intensity back to 0-1 range
+        config.patternScale = parseInt($(`#${PATTERN_SCALE_INPUT_ID}`).val(), 10) || DEFAULT_CONFIG.patternScale;
+        config.patternIntensity = parseFloat($(`#${PATTERN_INTENSITY_INPUT_ID}`).val()) / 100 || DEFAULT_CONFIG.patternIntensity;
+        config.noiseSeed = $(`#${NOISE_SEED_INPUT_ID}`).val();
 
-
-    // Update pattern settings - ensure conversion to number where appropriate
-    config.patternType = $('#' + PATTERN_TYPE_SELECT_ID).val();
-    config.noiseSeed = $('#' + NOISE_SEED_INPUT_ID).val();
-    // Convert 0-100 slider value back to 0.0-1.0 for config storage
-    config.patternIntensity = parseFloat($('#' + PATTERN_INTENSITY_INPUT_ID).val()) / 100.0;
-    config.patternScale = parseInt($('#' + PATTERN_SCALE_INPUT_ID).val(), 10) || DEFAULT_CONFIG.patternScale; // Use default if parsing fails
-
-
-    // Update Page Random Clicker setting
-     config.clickPageRandomCount = parseInt($('#' + CLICK_PAGE_RANDOM_COUNT_ID).val(), 10) || 1;
+        // Page Random Clicker Count
+        config.clickPageRandomCount = parseInt($(`#${CLICK_PAGE_RANDOM_COUNT_ID}`).val(), 10) || 1; // Ensure integer, min 1
 
 
-    // The config object is updated by reference, no need to return it.
-    // GM_log("Pack Filler Pro: Config updated from UI.", config); // Too chatty
+        GM_log("Pack Filler Pro: Config updated from UI.");
+        // Note: Validation is typically done before saving or before a fill operation,
+        // not necessarily every time config is updated from UI.
+    } catch (e) {
+        GM_log(`Pack Filler Pro: ERROR - Failed to update config from UI: ${e.message}`, e);
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler Pro: Cannot update config from UI due to error during retrieval.");
+    }
 }
 
 
 /**
- * Updates the text display for the selected fill mode.
- * Assumes $ from cash-dom is available.
+ * Updates the display of the current fill mode in the panel header.
+ * Assumes panelElement exists and $ from cash-dom is available.
  * @param {string} mode - The current fill mode ('fixed', 'max', 'unlimited').
  */
 function updatePanelModeDisplay(mode) {
-    // Check for dependency before updating
-    if (typeof $ === 'undefined') {
-        GM_log("Pack Filler Pro: updatePanelModeDisplay dependencies ($) missing. Cannot update mode display.");
-        return;
+    // Check critical dependencies
+    if (typeof $ === 'undefined' || !panelElement) {
+         GM_log("Pack Filler Pro: updatePanelModeDisplay dependencies ($ or panelElement) missing. Aborting.");
+         return;
     }
-    const modeText = $('#pfp-mode option:selected').text();
-    $(panelElement).find('.pfp-title').text(`Pack Filler Pro – ${modeText}`);
-    // GM_log(`Pack Filler Pro: Panel mode display updated to: ${modeText}`); // Too chatty
+
+    try {
+        const modeDisplay = mode === 'fixed' ? 'Fixed Count' :
+                            mode === 'max' ? 'Random Count' :
+                            mode === 'unlimited' ? 'All Visible' : 'Unknown Mode';
+        // Find the title span within the panel header and update its text
+        $(panelElement).find('.pfp-title').text(`Pack Filler Pro (${modeDisplay})`);
+    } catch (e) {
+        GM_log(`Pack Filler Pro: ERROR - Failed to update panel mode display: ${e.message}`, e);
+    }
 }
 
-
 /**
- * Toggles the visibility of the UI panel and updates the toggle button text/class.
- * Updates panel position if needed based on saved state.
- * Assumes $ from cash-dom, panelElement, toggleButtonElement, config object are available.
+ * Toggles the visibility of the panel and updates the toggle button text/position.
+ * Saves the panel's state and position.
+ * Assumes panelElement, toggleButtonElement exist, config object is available,
+ * and $ from cash-dom, debouncedSaveConfig, saveConfig, clamp are available.
  * @param {object} config - The script's configuration object.
  * @param {boolean} isVisible - Whether the panel should be visible.
- * @param {object} [pos] - The saved position {top, right, bottom, left}.
+ * @param {{top: string, right: string, bottom: string, left: string}} [pos=null] - Optional position object.
  */
-function updatePanelVisibility(config, isVisible, pos) { // Accept config here
-     // Check for dependencies before updating visibility
-     if (typeof $ === 'undefined' || !panelElement || !toggleButtonElement) {
-          GM_log("Pack Filler Pro: updatePanelVisibility dependencies ($, panel/toggle elements) missing. Cannot update visibility.");
-          return; // Abort if dependencies are missing
+function updatePanelVisibility(config, isVisible, pos = null) {
+    // Check critical dependencies
+     if (typeof $ === 'undefined' || !panelElement || !toggleButtonElement || typeof config !== 'object' || config === null || typeof debouncedSaveConfig !== 'function' || typeof saveConfig !== 'function' || typeof clamp !== 'function') {
+          GM_log("Pack Filler Pro: updatePanelVisibility critical dependencies missing. Aborting.");
+           // Cannot use Swal without config, fallback to log
+          GM_log("Pack Filler Pro: Cannot update panel visibility due to missing dependencies.");
+          return;
      }
 
-    if (isVisible) {
-        $(panelElement).removeClass('hidden');
-        $(toggleButtonElement).addClass('hidden');
-        GM_log("Pack Filler Pro: Panel shown.");
+    try {
+        if (isVisible) {
+            $(panelElement).removeClass('hidden');
+            $(toggleButtonElement).text('✕'); // Use 'X' or similar when panel is open
+            $(toggleButtonElement).attr('title', 'Close Pack Filler Pro Panel');
 
-        // Apply saved position if available and valid
-        if (pos && typeof pos === 'object') {
-             // Clear previous positioning styles to apply new ones cleanly
-             panelElement.style.top = '';
-             panelElement.style.right = '';
-             panelElement.style.bottom = '';
-             panelElement.style.left = '';
-
-             // Apply saved positions
-             if (pos.top !== 'auto') panelElement.style.top = pos.top;
-             if (pos.right !== 'auto') panelElement.style.right = pos.right;
-             if (pos.bottom !== 'auto') panelElement.style.bottom = pos.bottom;
-             if (pos.left !== 'auto') panelElement.style.left = pos.left;
-
-             // Default to top-right if no valid position properties were set
-             if (panelElement.style.top === '' && panelElement.style.bottom === '') panelElement.style.top = DEFAULT_CONFIG.panelPos.top;
-             if (panelElement.style.left === '' && panelElement.style.right === '') panelElement.style.right = DEFAULT_CONFIG.panelPos.right;
-
-
-             // Save the *applied* position back to config, standardizing to top/left if it was drag-moved,
-             // or keeping the saved format if it wasn't dragged.
-             // The dragging logic in bindPanelEvents ensures config.panelPos is updated correctly.
-             // This just ensures that if the config load somehow resulted in weird values,
-             // we default them and save the default/corrected position.
-             config.panelPos = {
-                  top: panelElement.style.top,
-                  right: panelElement.style.right,
-                  bottom: panelElement.style.bottom,
-                  left: panelElement.style.left
-             };
-             // Use a small delay before saving the *applied* position to avoid race conditions
-             // if this is called right after loading config on init.
-             setTimeout(() => debouncedSaveConfig(config), 50); // Pass config
+            // Apply saved position if provided and valid
+            if (pos && typeof pos === 'object') {
+                 // Validate and apply position properties
+                 if (typeof pos.top === 'string') $(panelElement).css('top', pos.top); else $(panelElement).css('top', '');
+                 if (typeof pos.right === 'string') $(panelElement).css('right', pos.right); else $(panelElement).css('right', '');
+                 if (typeof pos.bottom === 'string') $(panelElement).css('bottom', pos.bottom); else $(panelElement).css('bottom', '');
+                 if (typeof pos.left === 'string') $(panelElement).css('left', pos.left); else $(panelElement).css('left', '');
+            } else {
+                 // If no valid position is provided, apply default or last saved valid one from config
+                 if (typeof config.panelPos === 'object') {
+                      if (typeof config.panelPos.top === 'string') $(panelElement).css('top', config.panelPos.top); else $(panelElement).css('top', '');
+                      if (typeof config.panelPos.right === 'string') $(panelElement).css('right', config.panelPos.right); else $(panelElement).css('right', '');
+                      if (typeof config.panelPos.bottom === 'string') $(panelElement).css('bottom', config.panelPos.bottom); else $(panelElement).css('bottom', '');
+                      if (typeof config.panelPos.left === 'string') $(panelElement).css('left', config.panelPos.left); else $(panelElement).css('left', '');
+                 } else {
+                      // Fallback to default CSS position if config.panelPos is also invalid
+                      GM_log("Pack Filler Pro: Config panelPos is invalid. Using default CSS position.");
+                      $(panelElement).css({ top: '', right: '', bottom: '', left: '' }); // Clear inline styles
+                 }
+            }
+             // Ensure the toggle button is NOT hidden when the panel is visible
+             $(toggleButtonElement).removeClass('hidden');
 
         } else {
-             // If no saved position, apply default position
-             panelElement.style.top = DEFAULT_CONFIG.panelPos.top;
-             panelElement.style.right = DEFAULT_CONFIG.panelPos.right;
-             panelElement.style.bottom = DEFAULT_CONFIG.panelPos.bottom;
-             panelElement.style.left = DEFAULT_CONFIG.panelPos.left;
-              GM_log("Pack Filler Pro: No valid saved position found. Applying default position.");
-              // Save the default position
-              config.panelPos = { ...DEFAULT_CONFIG.panelPos };
-              setTimeout(() => debouncedSaveConfig(config), 50); // Pass config
+            $(panelElement).addClass('hidden');
+            $(toggleButtonElement).text('🎴'); // Use icon when panel is closed
+            $(toggleButtonElement).attr('title', 'Toggle Pack Filler Pro Panel');
         }
 
-        // If SimpleBar is initialized, update its scrollbar
-         if (panelSimpleBarInstance) {
-              try {
-                   panelSimpleBarInstance.recalculate();
-              } catch (e) {
-                   GM_log("Pack Filler Pro: Failed to recalculate SimpleBar on panel show.", e);
-              }
-         }
+        // Update config and save
+        config.panelVisible = isVisible;
+        // If hiding, capture the current position before it's potentially lost
+        if (!isVisible) {
+             // Capture current position from computed styles if possible, fallback to config or default
+             const computedStyle = window.getComputedStyle(panelElement);
+             config.panelPos = {
+                 top: computedStyle.top !== 'auto' ? computedStyle.top : (config.panelPos.top || DEFAULT_CONFIG.panelPos.top),
+                 right: computedStyle.right !== 'auto' ? computedStyle.right : (config.panelPos.right || DEFAULT_CONFIG.panelPos.right),
+                 bottom: computedStyle.bottom !== 'auto' ? computedStyle.bottom : (config.panelPos.bottom || DEFAULT_CONFIG.panelPos.bottom),
+                 left: computedStyle.left !== 'auto' ? computedStyle.left : (config.panelPos.left || DEFAULT_CONFIG.panelPos.left),
+             };
+             // Ensure captured positions are strings (e.g., "10px")
+             if (typeof config.panelPos.top !== 'string') config.panelPos.top = DEFAULT_CONFIG.panelPos.top;
+             if (typeof config.panelPos.right !== 'string') config.panelPos.right = DEFAULT_CONFIG.panelPos.right;
+             if (typeof config.panelPos.bottom !== 'string') config.panelPos.bottom = DEFAULT_CONFIG.panelPos.bottom;
+             if (typeof config.panelPos.left !== 'string') config.panelPos.left = DEFAULT_CONFIG.panelPos.left;
 
+             // Save immediately when panel is closed to persist position
+             saveConfig(config); // Assumes saveConfig is available
+             GM_log("Pack Filler Pro: Panel hidden, position saved.");
+        } else {
+             // For visibility changes that don't hide the panel, use debounced save
+             debouncedSaveConfig(config); // Assumes debouncedSaveConfig is available
+             GM_log("Pack Filler Pro: Panel shown.");
+        }
 
-    } else {
-        $(panelElement).addClass('hidden');
-        $(toggleButtonElement).removeClass('hidden');
-        GM_log("Pack Filler Pro: Panel hidden.");
-        // When hiding, no need to save position, as it's saved on drag/move.
+    } catch (e) {
+        GM_log(`Pack Filler Pro: ERROR - Failed to update panel visibility: ${e.message}`, e);
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler Pro: Cannot update panel visibility due to error.");
     }
 }
 
 
 /**
- * Updates the visibility of quantity input fields (fixed vs range) based on the selected fill mode.
- * Assumes $ from cash-dom and element IDs are available.
+ * Updates the visibility of quantity input groups based on the selected mode.
+ * Assumes $ from cash-dom and UI element IDs (from constants.js) are available.
+ * Assumes panelElement exists.
  * @param {string} mode - The current fill mode ('fixed', 'max', 'unlimited').
  */
 function updateQuantityInputVisibility(mode) {
-    // Check for dependencies before updating visibility
-     if (typeof $ === 'undefined') {
-          GM_log("Pack Filler Pro: updateQuantityInputVisibility dependencies ($) missing. Cannot update input visibility.");
-          return; // Abort if dependencies are missing
-     }
-
+    // Check critical dependencies
+    if (typeof $ === 'undefined' || !panelElement) {
+         GM_log("Pack Filler Pro: updateQuantityInputVisibility dependencies ($ or panelElement) missing. Aborting.");
+         return;
+    }
+    // Check for the existence of the required elements before manipulating them
     const countGroup = $('#pfp-count-group');
     const fixedGroup = $('#pfp-fixed-group');
-    const rangeInputsDiv = $('#pfp-range-inputs'); // The div wrapping min/max/max-total
+    const rangeInputs = $('#pfp-range-inputs');
 
-    // Ensure elements exist before trying to toggle classes
-    if (!countGroup.length || !fixedGroup.length || !rangeInputsDiv.length) {
-         GM_log("Pack Filler Pro: Quantity input elements not found. Cannot update their visibility.");
-         return; // Abort if elements are missing
+    if (countGroup.length === 0 || fixedGroup.length === 0 || rangeInputs.length === 0) {
+        GM_log("Pack Filler Pro: Required quantity input elements not found. Cannot update visibility.");
+        return; // Abort if elements are missing
     }
 
 
-    // Hide all quantity-related inputs initially
-    countGroup.addClass('hidden');
-    fixedGroup.addClass('hidden');
-    rangeInputsDiv.addClass('hidden');
-
-
-    // Show inputs based on the selected mode
-    switch (mode) {
-        case 'fixed':
-            countGroup.removeClass('hidden'); // Show count input
-            fixedGroup.removeClass('hidden'); // Show fixed quantity input
-            break;
-        case 'max': // Random count range
-            countGroup.removeClass('hidden'); // Show count input
-            rangeInputsDiv.removeClass('hidden'); // Show min/max/max-total inputs
-            break;
-        case 'unlimited':
-            // In unlimited mode, count is implicitly all visible inputs, so count input is hidden
-            fixedGroup.removeClass('hidden'); // Show fixed quantity input (unlimited mode usually means fixed qty per pack)
-            // Note: Could potentially allow range/pattern in unlimited mode, needs UI adjustment
-            break;
+    try {
+        switch (mode) {
+            case 'fixed':
+                countGroup.removeClass('hidden');
+                fixedGroup.removeClass('hidden');
+                rangeInputs.addClass('hidden');
+                break;
+            case 'max':
+                countGroup.removeClass('hidden');
+                fixedGroup.addClass('hidden');
+                rangeInputs.removeClass('hidden');
+                break;
+            case 'unlimited':
+                countGroup.addClass('hidden');
+                fixedGroup.addClass('hidden');
+                rangeInputs.removeClass('hidden'); // Still show range/max total for unlimited mode
+                break;
+            default:
+                // Hide all if mode is unknown
+                countGroup.addClass('hidden');
+                fixedGroup.addClass('hidden');
+                rangeInputs.addClass('hidden');
+                GM_log(`Pack Filler Pro: Unknown mode "${mode}" in updateQuantityInputVisibility. Hiding all quantity inputs.`);
+        }
+    } catch (e) {
+        GM_log(`Pack Filler Pro: ERROR - Failed to update quantity input visibility: ${e.message}`, e);
     }
-    // GM_log(`Pack Filler Pro: Quantity input visibility updated for mode: ${mode}`); // Too chatty
 }
 
 /**
- * Updates the visibility of pattern parameter input fields based on the selected pattern type.
- * Assumes $ from cash-dom and PATTERN_PARAMS_DIV_ID, NOISE_SEED_INPUT_ID, PATTERN_SCALE_INPUT_ID, PATTERN_INTENSITY_INPUT_ID are available.
+ * Updates the visibility of pattern parameter inputs based on the selected pattern type.
+ * Assumes $ from cash-dom and UI element IDs (from constants.js) are available.
+ * Assumes panelElement exists.
  * @param {string} patternType - The current pattern type ('random', 'fixed', 'gradient', 'perlin', 'alternating').
  */
 function updatePatternParamsVisibility(patternType) {
-     // Check for dependencies before updating visibility
-     if (typeof $ === 'undefined' || typeof PATTERN_PARAMS_DIV_ID === 'undefined') {
-          GM_log("Pack Filler Pro: updatePatternParamsVisibility dependencies ($, IDs) missing. Cannot update pattern params visibility.");
-          return; // Abort if dependencies are missing
+     // Check critical dependencies
+     if (typeof $ === 'undefined' || !panelElement) {
+          GM_log("Pack Filler Pro: updatePatternParamsVisibility dependencies ($ or panelElement) missing. Aborting.");
+          return;
      }
+     // Check for the existence of the required elements before manipulating them
+     const patternParamsDiv = $(`#${PATTERN_PARAMS_DIV_ID}`);
+     const noiseSeedInput = $(`#${NOISE_SEED_INPUT_ID}`).closest('.pfp-form-group'); // Get parent group
+     const patternScaleInput = $(`#${PATTERN_SCALE_INPUT_ID}`).closest('.pfp-form-group'); // Get parent group
+     const patternIntensityInput = $(`#${PATTERN_INTENSITY_INPUT_ID}`).closest('.pfp-form-group'); // Get parent group
 
-    const patternParamsDiv = $('#' + PATTERN_PARAMS_DIV_ID);
-    const noiseSeedGroup = patternParamsDiv.find('#' + NOISE_SEED_INPUT_ID).parent('.pfp-form-group'); // Find parent form group
-    const patternScaleGroup = patternParamsDiv.find('#' + PATTERN_SCALE_INPUT_ID).parent('.pfp-form-group'); // Find parent form group
-    const patternIntensityGroup = patternParamsDiv.find('#' + PATTERN_INTENSITY_INPUT_ID).parent('.pfp-form-group'); // Find parent form group
 
-     // Ensure elements exist
-     if (!patternParamsDiv.length || !noiseSeedGroup.length || !patternScaleGroup.length || !patternIntensityGroup.length) {
-          GM_log("Pack Filler Pro: Pattern parameter elements not found. Cannot update their visibility.");
+     if (patternParamsDiv.length === 0 || noiseSeedInput.length === 0 || patternScaleInput.length === 0 || patternIntensityInput.length === 0) {
+          GM_log("Pack Filler Pro: Required pattern parameter elements not found. Cannot update visibility.");
           return; // Abort if elements are missing
      }
 
 
-     // Hide all pattern parameter groups initially
-     noiseSeedGroup.addClass('hidden');
-     patternScaleGroup.addClass('hidden');
-     patternIntensityGroup.addClass('hidden');
-     // Hide the main params div too if no params will be shown
-     patternParamsDiv.addClass('hidden');
+     try {
+         // Hide all pattern-specific params by default
+         noiseSeedInput.addClass('hidden');
+         patternScaleInput.addClass('hidden');
+         patternIntensityInput.addClass('hidden');
 
-
-     // Show parameters based on the selected pattern type
-     switch (patternType) {
-          case 'perlin':
-               noiseSeedGroup.removeClass('hidden');
-               patternScaleGroup.removeClass('hidden');
-               patternIntensityGroup.removeClass('hidden');
-               patternParamsDiv.removeClass('hidden'); // Show the parent div
-               break;
-          case 'gradient':
-               // Gradient uses Scale and Intensity, but not Seed
-               patternScaleGroup.removeClass('hidden');
-               patternIntensityGroup.removeClass('hidden');
-               patternParamsDiv.removeClass('hidden'); // Show the parent div
-               break;
-          // 'random', 'fixed', 'alternating' have no specific parameters to show
-          default:
-               // Keep all pattern parameter groups and the parent div hidden
-               break;
+         // Show params based on pattern type
+         switch (patternType) {
+             case 'gradient':
+                 patternScaleInput.removeClass('hidden');
+                 patternIntensityInput.removeClass('hidden');
+                 break;
+             case 'perlin':
+                 noiseSeedInput.removeClass('hidden');
+                 patternScaleInput.removeClass('hidden');
+                 patternIntensityInput.removeClass('hidden');
+                 break;
+             // 'random', 'fixed', 'alternating' have no specific parameters to show
+             default:
+                 // If patternType is unknown or doesn't require specific params, all remain hidden
+                 if (patternType !== 'random' && patternType !== 'fixed' && patternType !== 'alternating') {
+                      GM_log(`Pack Filler Pro: Unknown patternType "${patternType}" in updatePatternParamsVisibility. Hiding all pattern params.`);
+                 }
+                 break;
+         }
+     } catch (e) {
+         GM_log(`Pack Filler Pro: ERROR - Failed to update pattern params visibility: ${e.message}`, e);
      }
-     // GM_log(`Pack Filler Pro: Pattern parameter visibility updated for pattern type: ${patternType}`); // Too chatty
 }
 
 
 /**
  * Applies or removes the 'dark-mode' class to relevant UI elements and SweetAlert2 popups.
- * Assumes $ from cash-dom, panelElement, toggleButtonElement, and window.Swal are available.
- * Assumes the MutationObserver for Swal popups is set up in init.
+ * Saves the dark mode state.
+ * Assumes config object is available, $ from cash-dom, panelElement, toggleButtonElement,
+ * debouncedSaveConfig, and MutationObserver are available.
  * @param {object} config - The script's configuration object.
- * @param {boolean} enable - Whether to enable dark mode.
+ * @param {boolean} isDarkMode - Whether dark mode should be enabled.
  */
-function applyDarkMode(config, enable) { // Accept config here
-     // Check for dependencies before applying dark mode
-     if (typeof $ === 'undefined' || !panelElement || !toggleButtonElement || typeof window.Swal === 'undefined') {
-          GM_log("Pack Filler Pro: applyDarkMode dependencies ($, panel/toggle elements, Swal) missing. Cannot apply dark mode.");
-          return; // Abort if dependencies are missing
+function applyDarkMode(config, isDarkMode) {
+     // Check critical dependencies
+     if (typeof $ === 'undefined' || !panelElement || !toggleButtonElement || typeof config !== 'object' || config === null || typeof debouncedSaveConfig !== 'function' || typeof MutationObserver === 'undefined' || typeof window.Swal === 'undefined') {
+          GM_log("Pack Filler Pro: applyDarkMode critical dependencies missing. Aborting.");
+          // Cannot use Swal without config, fallback to log
+          GM_log("Pack Filler Pro: Cannot apply dark mode due to missing dependencies.");
+          return;
      }
 
-     const panel = $(panelElement);
-     const toggleButton = $(toggleButtonElement);
 
-     if (enable) {
-          panel.addClass('dark-mode');
-          toggleButton.addClass('dark-mode');
-          // Also apply to any currently open SweetAlert2 popups
-          $('.swal2-popup, .swal2-backdrop-show').addClass('dark-mode');
-          GM_log("Pack Filler Pro: Dark mode enabled.");
-     } else {
-          panel.removeClass('dark-mode');
-          toggleButton.removeClass('dark-mode');
-          // Also remove from any currently open SweetAlert2 popups
-          $('.swal2-popup, .swal2-backdrop-show').removeClass('dark-mode');
-          GM_log("Pack Filler Pro: Dark mode disabled.");
-     }
-    // Save the state immediately (debounced)
-     debouncedSaveConfig(config); // Pass config
-}
+     try {
+         // Apply dark mode class to the panel and toggle button
+         if (isDarkMode) {
+             $(panelElement).addClass('dark-mode');
+             $(toggleButtonElement).addClass('dark-mode');
+         } else {
+             $(panelElement).removeClass('dark-mode');
+             $(toggleButtonElement).removeClass('dark-mode');
+         }
+
+         // Update config and save (debounced)
+         config.isDarkMode = isDarkMode;
+         debouncedSaveConfig(config); // Assumes debouncedSaveConfig is available
 
 
-// The following functions are made available to the main script's scope via @require.
-// - bindPanelEvents
-// - loadConfigIntoUI
-// - updateConfigFromUI
-// - updatePanelModeDisplay
-// - updatePanelVisibility
-// - updateQuantityInputVisibility
-// - updatePatternParamsVisibility
-// - applyDarkMode
+         // --- Apply Dark Mode to SweetAlert2 Popups ---
+         // SweetAlert2 popups are added to the body dynamically, so we need to observe the DOM
+         // or apply styles to them after they are created.
+         // Using a MutationObserver is a robust way to catch new Swal popups.
+
+         // Disconnect any existing observer to avoid duplicates
+         if (window._pfpSwalObserver) {
+             window._pfpSwalObserver.disconnect();
+             delete window._pfpSwalObserver;
+             GM_log("Pack Filler Pro: Disconnected previous Swal MutationObserver.");
+         }
+
+         // Create a new observer
+         const observer = new MutationObserver((mutations) => {
+             mutations.forEach((mutation) => {
+                 mutation.addedNodes.forEach((node) => {
+                     // Check if the added node is a SweetAlert2 container
+                     // Swal uses classes like 'swal2-container' and 'swal2-popup'
+                     // We target the main popup element for our custom class
+                     if (node.classList && node.classList.contains('swal2-popup')) {
+                         GM_log("Pack Filler Pro: MutationObserver detected a new SweetAlert2 popup.");
+                         // Apply the dark mode class if enabled
+                         if (config.isDarkMode) {
+                             $(node).addClass('dark-mode');
+                             GM_log("Pack Filler Pro: Applied dark-mode class to new Swal popup.");
+                         }
+                         // We don't need to observe inside the popup, so no need to disconnect here
+                     }
+                 });
+             });
+         });
+
+         // Start observing the document body for added nodes
+         observer.observe(document.body, { childList: true, subtree: true });
+
+         // Store the observer globally so we can disconnect it later (e.g., on script unload)
+         window._pfpSwalObserver = observer;
+         GM_log("Pack Filler Pro: New Swal MutationObserver started.");
+
+
+         GM_log(`Pack Filler Pro: Dark mode ${isDarkMode ? 'enabled' : 'disabled'}.`);
+
+     } catch (e) {
+         GM_log(`Pack Filler Pro: ERROR - Failed to apply dark mode: ${e.message}`, e);
+         // Cannot use Swal without config, fallback to log
+         GM_log("Pack Filler P
