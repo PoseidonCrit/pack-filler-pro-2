@@ -19,6 +19,12 @@ function loadConfig() {
     let cfg = { ...DEFAULT_CONFIG }; // Start with a fresh copy of defaults
 
     try {
+        // Check if GM_getValue is available
+        if (typeof GM_getValue === 'undefined') {
+             GM_log("Pack Filler Pro: GM_getValue not available. Cannot load config. Using defaults.");
+             return cfg; // Return defaults if GM_getValue is missing
+        }
+
         const raw = GM_getValue(CONFIG_KEY);
         GM_log("Pack Filler Pro: GM_getValue returned raw data:", raw);
 
@@ -53,9 +59,16 @@ function loadConfig() {
                       // the initial merge handles adding them from DEFAULT_CONFIG.
                       // This block mainly serves as a marker for future migrations.
                  }
-                 // Add migration logic for subsequent versions here...
-                 // if (parsed.version < 25) { ... }
-
+                 // Migration for versions < 25 (Added lastClear validation in validateFillConfig)
+                 if (parsed.version < 25) {
+                      GM_log("Pack Filler Pro: Applying v25 migration (ensuring lastClear).");
+                      // No specific transformation needed, merge handles it.
+                 }
+                 // Migration for versions < 26 (Added FILL_RANDOM_BTN_ID to constants/DEFAULT_CONFIG)
+                 if (parsed.version < 26) {
+                      GM_log("Pack Filler Pro: Applying v26 migration (ensuring FILL_RANDOM_BTN_ID).");
+                      // No specific transformation needed, merge handles it.
+                 }
 
                  // After all migrations, ensure any properties still missing (e.g., from very old saves or errors)
                  // are populated from DEFAULT_CONFIG. This is a final safety net.
@@ -106,6 +119,12 @@ function saveConfig(configToSave) {
           GM_log("Pack Filler Pro: saveConfig called with invalid or null config. Aborting save.");
           return;
      }
+     // Check if GM_setValue is available
+     if (typeof GM_setValue === 'undefined') {
+          GM_log("Pack Filler Pro: GM_setValue not available. Cannot save config.");
+          return; // Abort if GM_setValue is missing
+     }
+
 
     // Ensure the version is the current script version before saving
     configToSave.version = DEFAULT_CONFIG.version;
@@ -169,10 +188,10 @@ function validateFillConfig(config) {
           GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
           throw new Error(errorMsg); // Critical error, abort validation
      }
+     // MainThreadFillStrategies is needed to validate patternType
      if (typeof MainThreadFillStrategies === 'undefined') {
-          const errorMsg = "Validation failed: MainThreadFillStrategies object from fillLogic.js not found.";
-          GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMsg}`);
-          throw new Error(errorMsg); // Critical error, abort validation
+          GM_log("Pack Filler Pro: validateFillConfig: MainThreadFillStrategies object from fillLogic.js not found. Cannot fully validate patternType.");
+          // Continue validation, but skip patternType check
      }
 
 
@@ -215,8 +234,8 @@ function validateFillConfig(config) {
      }
 
 
-    // Validate patternType exists in main thread strategies
-     if (!MainThreadFillStrategies[config.patternType]) {
+    // Validate patternType exists in main thread strategies (only if strategies object is available)
+     if (typeof MainThreadFillStrategies === 'object' && !MainThreadFillStrategies[config.patternType]) {
          GM_log(`Pack Filler Pro: Validation warning: Unknown patternType "${config.patternType}". Setting to default "${DEFAULT_CONFIG.patternType}".`);
          config.patternType = DEFAULT_CONFIG.patternType;
      }
@@ -226,18 +245,10 @@ function validateFillConfig(config) {
          GM_log(`Pack Filler Pro: Validation warning: Invalid fillEmptyOnly value (${config.fillEmptyOnly}). Setting to default ${DEFAULT_CONFIG.fillEmptyOnly}.`);
          config.fillEmptyOnly = DEFAULT_CONFIG.fillEmptyOnly;
     }
-     if (typeof config.autoFillLoaded !== 'boolean') {
-         GM_log(`Pack Filler Pro: Validation warning: Invalid autoFillLoaded value (${config.autoFillLoaded}). Setting to default ${DEFAULT_CONFIG.autoFillLoaded}.`);
-         config.autoFillLoaded = DEFAULT_CONFIG.autoFillLoaded;
+      if (typeof config.lastClear !== 'boolean') { // Added lastClear validation
+         GM_log(`Pack Filler Pro: Validation warning: Invalid lastClear value (${config.lastClear}). Setting to default ${DEFAULT_CONFIG.lastClear}.`);
+         config.lastClear = DEFAULT_CONFIG.lastClear;
      }
-     if (typeof config.scrollToBottomAfterLoad !== 'boolean') {
-         GM_log(`Pack Filler Pro: Validation warning: Invalid scrollToBottomAfterLoad value (${config.scrollToBottomAfterLoad}). Setting to default ${DEFAULT_CONFIG.scrollToBottomAfterLoad}.`);
-         config.scrollToBottomAfterLoad = DEFAULT_CONFIG.scrollToBottomAfterLoad;
-     }
-      if (typeof config.loadFullPage !== 'boolean') {
-         GM_log(`Pack Filler Pro: Validation warning: Invalid loadFullPage value (${config.loadFullPage}). Setting to default ${DEFAULT_CONFIG.loadFullPage}.`);
-         config.loadFullPage = DEFAULT_CONFIG.loadFullPage;
-      }
      if (typeof config.panelVisible !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid panelVisible value (${config.panelVisible}). Setting to default ${DEFAULT_CONFIG.panelVisible}.`);
          config.panelVisible = DEFAULT_CONFIG.panelVisible;
@@ -245,10 +256,6 @@ function validateFillConfig(config) {
      if (typeof config.isDarkMode !== 'boolean') {
          GM_log(`Pack Filler Pro: Validation warning: Invalid isDarkMode value (${config.isDarkMode}). Setting to default ${DEFAULT_CONFIG.isDarkMode}.`);
          config.isDarkMode = DEFAULT_CONFIG.isDarkMode;
-     }
-      if (typeof config.lastClear !== 'boolean') { // Added lastClear validation
-         GM_log(`Pack Filler Pro: Validation warning: Invalid lastClear value (${config.lastClear}). Setting to default ${DEFAULT_CONFIG.lastClear}.`);
-         config.lastClear = DEFAULT_CONFIG.lastClear;
      }
 
 
