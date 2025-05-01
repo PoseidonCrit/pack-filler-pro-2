@@ -28,7 +28,7 @@ const panelHTML = `
           <div class="pfp-form-group" id="pfp-count-group">
             <label for="pfp-count" class="pfp-label">Number of Packs to Fill:</label>
             <input type="number" id="pfp-count" min="0" list="pfp-count-list" class="pfp-input" placeholder="e.g., 10" />
-          </div>
+                      </div>
 
           <div class="pfp-form-group" id="pfp-fixed-group">
             <label for="pfp-fixed" class="pfp-label">Copies per Pack:</label>
@@ -653,15 +653,4 @@ function addPanelCSS() {
          /*
          .simplebar-wrapper { ... }
          .simplebar-height-auto-observer { ... }
-         .simplebar-mask { ... }
-         .simplebar-offset { ... }
-         .simplebar-content-wrapper { ... }
-         .simplebar-content { ... }
-         .simplebar-track { ... }
-         .simplebar-scrollbar { ... }
-         */
-      `);
-}
-
-// The constants panelHTML, panelToggleHTML and function addPanelCSS are made available
-// to the main script's scope via @require.
+         .simple...
