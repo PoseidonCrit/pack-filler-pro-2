@@ -224,25 +224,12 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
      }
     const targetedCount = potentialInputsToFill.length;
 
-
-    if (targetedCount === 0) {
-         if (!isAutoFill) SWAL_ALERT('Fill Packs', `No packs targeted based on current mode (${mode}) and count (${count}).`, 'info', config); // Pass config to SWAL
-         GM_log(`Fill operation aborted: No packs targeted. Mode: ${mode}, Count: ${count}.`);
-         return;
-    }
-
-    // Apply 'Clear Before Fill' option (only for manual trigger)
-    if (clear && !isAutoFill) {
-        clearAllInputs(); // Assumes clearAllInputs is accessible
-    }
-
     // Apply the 'Fill Empty Only' filter
     const inputsToActuallyFill = fillEmptyOnly
         ? potentialInputsToFill.filter(el => !el.value || parseInt(el.value, 10) === 0)
         : potentialInputsToFill;
 
     const filledCount = inputsToActuallyFill.length;
-
 
     if (filledCount === 0 && targetedCount > 0) {
          // If packs were targeted but none were empty (and Fill Empty Only is relevant)
@@ -268,6 +255,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
     // Declare strategy outside the try block and initialize it with the default random strategy
     let strategy = FillStrategies.random; // Initialize strategy with a default
 
+
     // --- Core Filling Logic ---
     // Determine quantities based on pattern or mode
     if (patternType && patternType !== 'random') {
@@ -292,7 +280,8 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                      };
                      patternWorker.onerror = (error) => {
                          GM_log("Pack Filler Pro: Web Worker error during calculation:", error);
-                         reject(error);
+                         // On worker error, we will fall back to main thread calculation
+                         reject(error); // Reject the promise to trigger the catch block
                      };
                      // Post message to worker with necessary data
                      patternWorker.postMessage({
@@ -317,12 +306,17 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
                  }
 
              } catch (error) {
-                  GM_log("Pack Filler Pro: Error receiving data from worker, falling back to main thread calculation.", error);
+                  GM_log("Pack Filler Pro: Error receiving data from worker or worker failed, falling back to main thread calculation.", error);
                   // Fallback to main thread calculation if worker fails
-                  strategy = getFillStrategy(config, true); // Get fallback strategy
+                  strategy = getFillStrategy(config, true); // Get fallback strategy (Perlin fallback or default random)
+                  // Recalculate quantities on the main thread using the fallback strategy
+                  quantitiesToApply = []; // Clear any partial results from the failed worker attempt
+                  currentTotal = 0; // Reset total for main thread calculation
+                  maxTotalHit = false; // Reset max total hit flag
+
                   inputsToActuallyFill.forEach((input, index) => {
                        let qty = strategy(config, index, totalPacksToFill);
-                        // Apply max total limit on main thread if worker didn't
+                        // Apply max total limit on main thread
                         if (useMaxTotal) {
                              const remaining = maxTotalAmount - currentTotal;
                              qty = Math.min(qty, Math.max(0, remaining)); // Ensure non-negative quantity
@@ -336,7 +330,7 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
          } else {
              // Calculate pattern quantities on the main thread (for non-Perlin patterns or if worker is unavailable)
              GM_log(`Pack Filler Pro: Calculating pattern (${patternType}) on main thread.`);
-             // strategy is already initialized above
+             // strategy is already initialized above with the intended strategy (non-Perlin)
              const totalPacksToFill = inputsToActuallyFill.length; // Recalculate total packs to fill
 
              inputsToActuallyFill.forEach((input, index) => {
@@ -378,71 +372,5 @@ async function fillPacks(config, isAutoFill = false) { // Accept config here and
         virtualUpdate(inputsToActuallyFill, quantitiesToApply);
     }
 
-
-     // --- DETAILED FEEDBACK GENERATION (SweetAlert2 Modal/Toast) ---
-     // Only show modal/toast for manual fills or if autofill resulted in actual fills
-     if (!isAutoFill || (isAutoFill && filledCount > 0)) {
-
-         let feedbackModeDesc = "";
-         let feedbackQuantityDesc = "";
-
-         if (patternType && patternType !== 'random') {
-             feedbackModeDesc = `Pattern Mode: ${patternType.charAt(0).toUpperCase() + patternType.slice(1)}`;
-             feedbackQuantityDesc = `Pattern applied with scale ${config.patternScale} and intensity ${config.patternIntensity}.`;
-             if (patternType === 'perlin') {
-                 feedbackQuantityDesc += ` Seed: ${config.noiseSeed === '' ? 'Random' : config.noiseSeed}.`;
-             }
-         } else {
-             switch (mode) {
-                 case 'fixed':
-                     feedbackModeDesc = `Fixed Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                     feedbackQuantityDesc = `${fixedQty} copies per pack.`;
-                     break;
-                 case 'max':
-                      feedbackModeDesc = `Random Count Mode (${count} pack${count === 1 ? '' : 's'})`;
-                      feedbackQuantityDesc = `Random copies (${minQty}-${maxQty}) per pack.`;
-                      break;
-                 case 'unlimited':
-                     feedbackModeDesc = `All Visible Packs Mode`;
-                     feedbackQuantityDesc = `${fixedQty} copies per pack.`;
-                     break;
-                 default:
-                     feedbackModeDesc = `Mode: ${mode}`;
-                     feedbackQuantityDesc = `Quantity chosen per pack.`;
-             }
-         }
-
-
-         const clearStatus = clear && !isAutoFill ? "<br>- Inputs Cleared First" : "";
-         const autoFillStatus = isAutoFill ? "<br>- Triggered by Auto-Fill" : "";
-         const emptyOnlyStatus = fillEmptyOnly ? "<br>- Only Empty Inputs Filled" : "";
-         const maxTotalStatus = useMaxTotal && maxTotalHit ? `<br>- Max Total Limit (${maxTotalAmount}) Reached` : '';
-
-
-         const averagePerFilled = filledCount > 0 ? (currentTotal / filledCount).toFixed(2) : 'N/A';
-
-         let summaryHtml = `
-              <p><strong>Operation Details:</strong>${clearStatus}${autoFillStatus}${emptyOnlyStatus}${maxTotalStatus}</p>
-              <p><strong>Fill Mode:</strong> ${feedbackModeDesc}</p>
-              <p><strong>Targeted Packs:</strong> ${targetedCount} / ${availablePacks} visible</p>
-              <p><strong>Packs Actually Filled:</strong> ${filledCount}</p>
-              <p><strong>Quantity Rule:</strong> ${feedbackQuantityDesc}</p>
-              <p><strong>Total Copies Added:</strong> ${currentTotal}</p>
-              <p><strong>Average Copies per Filled Pack:</strong> ${averagePerFilled}</p>
-          `;
-
-          GM_log(`Pack Filler Pro: Fill complete. ${summaryHtml.replace(/<br>- /g, '; ').replace(/<.*?>/g, '').replace(/\n/g, ' ')}`);
-
-
-          if (isAutoFill) {
-              SWAL_TOAST(`Auto-filled ${filledCount} packs (Total: ${currentTotal})`, 'success', config); // Pass config to SWAL
-          } else {
-              SWAL_ALERT('Fill Summary', summaryHtml, 'success', config); // Pass config to SWAL
-          }
-     }
- }
-
-// The functions calculateFillCount, chooseQuantity, distribute, fillPacks,
-// FillStrategies, getFillStrategy, and virtualUpdate are made available
-// to the main script's scope via @require.
-
+    // Apply 'Clear Before Fill' option (only for manual trigger) - Moved here to apply AFTER quantity calculation
+    // This ensures quantit
