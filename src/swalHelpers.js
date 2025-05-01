@@ -1,9 +1,8 @@
 // This file provides helper functions for displaying SweetAlert2 modals and toasts.
-// It relies on the SweetAlert2 library (window.Swal), which is assumed to be
-// loaded via @require in the main script.
+// It relies on the SweetAlert2 library (window.Swal).
 
-// Assumes window.Swal, GM_log, and sanitize (from domUtils) are available in the main script's scope.
-
+// It assumes window.Swal and sanitize (from domUtils) are available.
+// GM_log is used for logging errors.
 
 /* --- SweetAlert2 Custom Alerts --- */
 /**
@@ -20,7 +19,7 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
     if (typeof window.Swal === 'undefined') {
         // Fallback to native alert if Swal is missing. Sanitize might also be missing.
         const fallbackHtml = typeof sanitize === 'function' ? sanitize(html) : html;
-        GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 not available. Falling back to alert: ${title} - ${fallbackHtml}`);
+        // GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 not available. Falling back to alert: ${title} - ${fallbackHtml}`); // Minimal logging
         alert(`${title}\n\n${fallbackHtml}`);
         return;
     }
@@ -33,11 +32,11 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
         popup: 'pfp-swal-popup',
         title: 'pfp-swal-title',
         htmlContainer: 'pfp-swal-html',
-        confirmButton: 'mini primary' // Use mini.css/custom button style
+        confirmButton: 'mini primary' // Use mini.css/custom button style (assuming basic mini.css is added)
     };
 
     // Apply dark mode class if enabled in config.
-    // The MutationObserver in uiManager.js also handles this dynamically for new popups.
+    // The MutationObserver in uiManager.js will handle this dynamically for new popups.
     // Applying it here ensures it's set on the initial creation options.
     if (config && config.isDarkMode) {
         // Ensure classes are added correctly without duplicating or causing issues
@@ -54,13 +53,11 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
             confirmButtonText: 'OK',
             customClass: customClasses,
             buttonsStyling: false // Required to use custom button class
-            // The didOpen logic for dark mode is handled in uiManager.js now via MutationObserver
-            // to handle subsequent modals.
         });
     } catch (e) {
-        GM_log("Pack Filler Pro: Error displaying SweetAlert2 modal.", e);
+        // GM_log("Pack Filler Pro: Error displaying SweetAlert2 modal.", e); // Minimal logging
         // Fallback to native alert if Swal.fire throws an error
-         GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 threw error. Falling back to alert: ${title} - ${sanitizedHtml}`, e);
+         // GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 threw error. Falling back to alert: ${title} - ${sanitizedHtml}`, e); // Minimal logging
         alert(`${title}\n\n${sanitizedHtml}`);
     }
 }
@@ -76,7 +73,7 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
 function SWAL_TOAST(title, icon = 'info', config = null) {
     // Check critical dependencies
     if (typeof window.Swal === 'undefined') {
-         GM_log(`Pack Filler Pro SWAL_TOAST Error: SweetAlert2 not available. Skipping toast: ${title}`);
+         // GM_log(`Pack Filler Pro SWAL_TOAST Error: SweetAlert2 not available. Skipping toast: ${title}`); // Minimal logging
          return;
     }
     // Sanitize title for safety (though less critical for toasts usually)
@@ -88,7 +85,7 @@ function SWAL_TOAST(title, icon = 'info', config = null) {
     };
 
     // Apply dark mode class if enabled in config.
-    // The MutationObserver in uiManager.js also handles this dynamically for new popups.
+    // The MutationObserver in uiManager.js will handle this dynamically for new popups.
     // Applying it here ensures it's set on the initial creation options.
     if (config && config.isDarkMode) {
         customClasses.popup = (customClasses.popup + ' dark-mode').trim();
@@ -103,22 +100,20 @@ function SWAL_TOAST(title, icon = 'info', config = null) {
             timerProgressBar: true,
             customClass: customClasses,
              didOpen: (toast) => {
-                 // Check if toast is a valid element before adding listeners
-                 if (toast instanceof HTMLElement) {
+                 // Add event listeners to pause/resume timer on hover
+                 if (toast instanceof HTMLElement) { // Check if valid element
                       toast.addEventListener('mouseenter', window.Swal.stopTimer);
                       toast.addEventListener('mouseleave', window.Swal.resumeTimer);
                  } else {
-                     GM_log("Pack Filler Pro: SWAL_TOAST didOpen: toast element not valid.");
+                     // GM_log("Pack Filler Pro: SWAL_TOAST didOpen: toast element not valid."); // Minimal logging
                  }
              }
-            // The didOpen logic for dark mode is handled in uiManager.js now via MutationObserver
-            // to handle subsequent toasts.
         }).fire({
             icon: icon,
             title: sanitizedTitle // Use sanitized title
         });
     } catch (e) {
-        GM_log("Pack Filler Pro: Error displaying SweetAlert2 toast.", e);
+        // GM_log("Pack Filler Pro: Error displaying SweetAlert2 toast.", e); // Minimal logging
         // No suitable fallback for toast, just log the error.
     }
 }
