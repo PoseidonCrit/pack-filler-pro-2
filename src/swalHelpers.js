@@ -1,9 +1,8 @@
 // This file provides helper functions for displaying SweetAlert2 modals and toasts.
 // It relies on the SweetAlert2 library (window.Swal), which is assumed to be
 // loaded via @require in the main script.
-// Note: This module now accepts the 'config' object to apply dark mode if needed.
 
-// Assumes window.Swal, GM_log, and sanitize from domUtils.js are available in the main script's scope.
+// Assumes window.Swal, GM_log, and sanitize (from domUtils) are available in the main script's scope.
 
 
 /* --- SweetAlert2 Custom Alerts --- */
@@ -19,8 +18,10 @@
 function SWAL_ALERT(title, html, icon = 'info', config = null) {
     // Check critical dependencies
     if (typeof window.Swal === 'undefined') {
-        GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 not available. Falling back to alert: ${title} - ${html}`);
-        alert(`${title}\n\n${html}`); // Fallback if Swal is missing
+        // Fallback to native alert if Swal is missing. Sanitize might also be missing.
+        const fallbackHtml = typeof sanitize === 'function' ? sanitize(html) : html;
+        GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 not available. Falling back to alert: ${title} - ${fallbackHtml}`);
+        alert(`${title}\n\n${fallbackHtml}`);
         return;
     }
     // Sanitize inputs for safety before using in HTML
@@ -59,8 +60,8 @@ function SWAL_ALERT(title, html, icon = 'info', config = null) {
     } catch (e) {
         GM_log("Pack Filler Pro: Error displaying SweetAlert2 modal.", e);
         // Fallback to native alert if Swal.fire throws an error
-         GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 threw error. Falling back to alert: ${title} - ${html}`, e);
-        alert(`${title}\n\n${html}`);
+         GM_log(`Pack Filler Pro SWAL_ALERT Error: SweetAlert2 threw error. Falling back to alert: ${title} - ${sanitizedHtml}`, e);
+        alert(`${title}\n\n${sanitizedHtml}`);
     }
 }
 
