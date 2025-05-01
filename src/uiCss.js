@@ -592,7 +592,7 @@ function addPanelCSS() {
             color: var(--pfp-secondary-text) !important;
         }
         .swal2-actions button.mini.secondary:hover {
-            background-color: var(--pfp-secondary-hover) !important; border-color: var(--pfp-secondary-hover) !important;
+            background-color: var(--pfp-swal-button-secondary-hover) !important; border-color: var(--pfp-swal-button-secondary-hover) !important;
         }
 
 
@@ -628,7 +628,6 @@ function addPanelCSS() {
             height: 28px !important;
              flex-shrink: 0; /* Prevent icon from shrinking */
         }
-        .pfp-swal-toast-popup .swal2-icon .swal2-icon-content { font-size: 20px !important; /* Adjust icon content size */ }
         .pfp-swal-toast-popup .swal2-close {
              position: static !important; /* Position close button inline */
              margin-left: 10px !important; /* Space before close button */
