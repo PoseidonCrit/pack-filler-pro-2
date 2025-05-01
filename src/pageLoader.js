@@ -1,295 +1,170 @@
 // This file handles the logic for automatically scrolling the page to load all packs.
 // It uses the 'config' object (now passed as a parameter)
 // and relies on browser window/document properties.
-// It assumes 'getPackInputs' from src/domUtils.js,
-// 'fillPacks' from src/fillLogic.js,
-// 'SWAL_TOAST' from src/swalHelpers.js,
-// '$' from cash-dom, and GM_log are available via @require.
+
+// It assumes the following are available in the main script's scope via @require:
+// - functions from domUtils.js (getPackInputs, $)
+// - functions from fillLogic.js (fillPacks)
+// - functions from swalHelpers.js (SWAL_TOAST, SWAL_ALERT)
+// - constants from constants.js (SELECTOR, SCROLL_TO_BOTTOM_CHECKBOX_ID etc.)
+// - GM_log function
 
 /* --- Full Page Load Functionality (Programmatic Scrolling) --- */
 
 /**
  * Scrolls the page to load all packs if enabled in the config.
- * Uses IntersectionObserver if a '.load-more-btn' is found, falls back to polling otherwise.
+ * Uses scroll polling to detect new content.
+ * Provides user feedback via SweetAlert2 toasts.
+ * Assumes getPackInputs, fillPacks, SWAL_TOAST, SWAL_ALERT, $ from cash-dom, SELECTOR,
+ * SCROLL_TO_BOTTOM_CHECKBOX_ID, AUTO_FILL_LOADED_CHECKBOX_ID, and GM_log are available.
  * @param {object} config - The script's configuration object.
  */
 async function loadFullPageIfNeeded(config) {
     GM_log("Pack Filler Pro: loadFullPageIfNeeded function entered.");
 
-    // Check if auto-load is enabled in the configuration
-    if (!config || !config.loadFullPage) {
-         GM_log("Pack Filler Pro: Auto-load full page is disabled in config or config is invalid.");
-         // Ensure max count for input is updated based on initially visible if not auto-loading
-         $('#pfp-count').attr('max', getPackInputs().length);
+    // Basic validation of config object
+    if (typeof config !== 'object' || config === null) {
+         GM_log("Pack Filler Pro: Invalid config object passed to loadFullPageIfNeeded. Aborting.");
+         // Cannot use Swal without config, fallback to alert
+         alert('Pack Filler Pro Error: Invalid configuration. Auto-loading aborted.');
          return;
     }
 
-    GM_log("Pack Filler Pro: Auto-load full page is enabled. Starting load process...");
-
-    const loadMoreButton = document.querySelector('.load-more-btn');
-    const initialInputCount = getPackInputs().length; // Get initial count before loading
-
-    if (loadMoreButton) {
-        GM_log("Pack Filler Pro: Found Load More button. Using IntersectionObserver.");
-        await loadWithIntersectionObserver(config, loadMoreButton);
-    } else {
-        GM_log("Pack Filler Pro: Load More button not found. Falling back to scroll polling.");
-        await loadWithScrollPolling(config);
+    // Check if auto-load is enabled in the configuration
+    if (!config.loadFullPage) {
+         GM_log("Pack Filler Pro: Auto-load full page is disabled in config.");
+         // Ensure max count for input is updated based on initially visible if not auto-loading
+         // Assumes getPackInputs and $ are available
+         if (typeof getPackInputs === 'function' && typeof $ === 'function') {
+              $('#pfp-count').attr('max', getPackInputs().length); // Assumes $ is cash-dom
+              GM_log("Pack Filler Pro: Max count for input set based on initially visible inputs.");
+         } else {
+              GM_log("Pack Filler Pro: getPackInputs or $ function not found. Could not set max count.");
+         }
+         return; // Exit if auto-load is disabled
     }
 
-    // --- Actions after loading (either method) finishes ---
-    GM_log("Pack Filler Pro: Full page auto-load process finished.");
+    GM_log("Pack Filler Pro: Auto-load full page is enabled. Starting scroll process...");
 
-    // Optional: Scroll to the very bottom after loading is finished
-    if (config.scrollToBottomAfterLoad) {
-         GM_log("Pack Filler Pro: Scrolling to bottom after load.");
-         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    const scrollDelay = 300; // ms to wait after each scroll
+    const scrollCheckIterations = 20; // Number of times to check for height/input change after a scroll
+    const scrollCheckInterval = 100; // ms between height/input checks
+    const maxScrollAttempts = 150; // Safety break to prevent infinite loops
+
+    // Check if necessary functions/constants are available before starting the process
+    if (typeof getPackInputs !== 'function' || typeof $ === 'undefined' || typeof SELECTOR === 'undefined') {
+         const errorMessage = "Required dependencies (getPackInputs, $, or SELECTOR) missing for auto-load. Auto-loading aborted.";
+         GM_log(`Pack Filler Pro: FATAL ERROR - ${errorMessage}`);
+         if (typeof SWAL_ALERT === 'function') SWAL_ALERT('Auto-Load Error', errorMessage, 'error', config);
+         else alert(`Pack Filler Pro Error: ${errorMessage}`);
+         return; // Abort if critical dependencies are missing
+    }
+    // Check if fillPacks is available if auto-fill is enabled
+    if (config.autoFillLoaded && typeof fillPacks !== 'function') {
+         const errorMessage = "fillPacks function not found, but auto-fill loaded is enabled. Auto-fill will be skipped.";
+         GM_log(`Pack Filler Pro: WARNING - ${errorMessage}`);
+          if (typeof SWAL_TOAST === 'function') SWAL_TOAST('Auto-Fill Warning', errorMessage, 'warning', config);
     }
 
-     // Final update to max count on the UI panel
-     const finalInputCount = getPackInputs().length;
-     $('#pfp-count').attr('max', finalInputCount);
-     GM_log(`Pack Filler Pro: Final visible input count after load: ${finalInputCount}.`);
+
+    let lastHeight = 0;
+    let currentHeight = document.body.scrollHeight;
+    let scrollAttempts = 0;
+    const initialInputCount = getPackInputs().length;
+
+    GM_log(`Pack Filler Pro: Starting auto-load. Initial height: ${currentHeight}, Initial Inputs: ${initialInputCount}.`);
 
 
-    // Optional: Show a final toast message summarizing the load process
-    if (finalInputCount > initialInputCount) {
-        SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs. Total: ${finalInputCount}.`, 'success', config);
-    } else if (initialInputCount > 0) {
-        SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially. Total: ${finalInputCount}.`, 'info', config);
-    } else {
-        // This case might happen if no inputs are found at all
-        if ($('.pack-num-input').length === 0) {
-             SWAL_TOAST('No pack inputs found on the page.', 'info', config);
-        } else {
-             SWAL_TOAST(`Auto-load finished. Found ${finalInputCount} packs.`, 'info', config);
-        }
-    }
-}
+    // Initial short wait for page elements to render before the first scroll/check
+    await new Promise(resolve => setTimeout(resolve, 500));
+    currentHeight = document.body.scrollHeight; // Update height after initial wait
 
-/**
- * Loads the full page using IntersectionObserver to detect a "load more" button.
- * @param {object} config - The script's configuration object.
- * @param {HTMLElement} loadMoreButton - The button element to observe.
- * @returns {Promise<void>} A promise that resolves when loading is deemed complete.
- */
-async function loadWithIntersectionObserver(config, loadMoreButton) {
-    return new Promise(resolve => {
-        let scrollAttempts = 0;
-        const maxAttempts = 200; // Safety break for excessive scrolling
-        const safetyTimeoutDuration = 30000; // 30 seconds safety timeout
-
-        // Create the IntersectionObserver
-        const observer = new IntersectionObserver((entries, observerInstance) => {
-            const buttonEntry = entries.find(entry => entry.target === loadMoreButton);
-
-            // Check if the observed button element is currently in the DOM
-            if (!document.body.contains(loadMoreButton)) {
-                 GM_log("Pack Filler Pro: Load More button removed from DOM. Assuming end of content. Disconnecting observer.");
-                 resolve(); // Resolve the promise to signal completion
-                 return; // Exit callback
-            }
-
-            if (buttonEntry && buttonEntry.isIntersecting) {
-                 // Check if button is visible and not disabled
-                 const isButtonVisibleAndEnabled = loadMoreButton.offsetParent !== null && !loadMoreButton.disabled;
-
-                if (isButtonVisibleAndEnabled) {
-                    GM_log(`Pack Filler Pro: Load More button intersected. Scrolling (${scrollAttempts + 1}/${maxAttempts}).`);
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                    scrollAttempts++;
-
-                    if (scrollAttempts >= maxAttempts) {
-                         GM_log(`Pack Filler Pro: Reached max scroll attempts (${maxAttempts}) with IntersectionObserver. Disconnecting observer.`);
-                         resolve(); // Resolve the promise to signal completion
-                    }
-
-                    // Reset safety timeout on successful scroll/intersection
-                    resetSafetyTimeout();
-
-                } else {
-                     // Button is intersecting but not visible or is disabled - likely end of content
-                     GM_log("Pack Filler Pro: Load More button is intersecting but not visible or is disabled. Assuming end of content. Disconnecting observer.");
-                     resolve(); // Resolve the promise
-                }
-            }
-            // If not intersecting, do nothing and wait for the next intersection
-        }, {
-            // Options for the observer
-            root: null, // Observe relative to the viewport
-            rootMargin: '0px',
-            threshold: 0.1 // Trigger when 10% of the button is visible
-        });
-
-        // Start observing the button
-        observer.observe(loadMoreButton);
-        GM_log("Pack Filler Pro: IntersectionObserver started observing the Load More button.");
-
-
-        // Add a safety timeout in case the observer never triggers or the button state never changes
-        let safetyTimeoutId;
-        const resetSafetyTimeout = () => {
-             clearTimeout(safetyTimeoutId);
-             safetyTimeoutId = setTimeout(() => {
-                  GM_log(`Pack Filler Pro: IntersectionObserver safety timeout (${safetyTimeoutDuration}ms) reached. Disconnecting observer.`);
-                  resolve(); // Resolve the promise
-             }, safetyTimeoutDuration);
-        };
-
-        // Start the initial safety timeout
-        resetSafetyTimeout();
-        GM_log(`Pack Filler Pro: IntersectionObserver safety timeout started (${safetyTimeoutDuration}ms).`);
-
-
-        // Override the resolve function to ensure the observer and timeout are cleaned up
-        const originalResolve = resolve;
-        resolve = () => {
-             clearTimeout(safetyTimeoutId);
-             if (observer) {
-                 observer.disconnect();
-                 GM_log("Pack Filler Pro: IntersectionObserver disconnected.");
-             }
-             // Trigger auto-fill if enabled AFTER loading is complete
-             const finalInputCount = getPackInputs().length;
-             const initialInputCount = parseInt($('#pfp-count').attr('max'), 10) || 0; // Get initial count from UI max attr
-             if (config.autoFillLoaded && finalInputCount > initialInputCount) {
-                  GM_log(`Pack Filler Pro: IntersectionObserver finished, new inputs loaded (${finalInputCount - initialInputCount}). Triggering final auto-fill.`);
-                  // Small delay before filling to ensure inputs are fully rendered/interactive
-                  setTimeout(() => {
-                      fillPacks(config, true); // Pass config and isAutoFill=true
-                  }, 100);
-             } else if (config.autoFillLoaded && finalInputCount === initialInputCount && finalInputCount > 0) {
-                   // If auto-fill is enabled but no *new* inputs loaded, maybe fill the initial ones if they weren't?
-                   // Or assume auto-fill loaded only applies to newly loaded? Let's stick to newly loaded for now.
-                   GM_log("Pack Filler Pro: IntersectionObserver finished, no new inputs loaded. Auto-fill skipped.");
-             }
-
-
-             originalResolve(); // Call the original resolve
-        };
-
-        // Update the observer callback to use the new resolved function
-        const originalObserverCallback = observer.callback;
-         observer.callback = (entries, observerInstance) => {
-              // Pass the modified resolve function to the original callback if needed
-              // Or handle all logic directly here before calling originalResolve
-              // Let's handle the logic directly here for clarity
-              const buttonEntry = entries.find(entry => entry.target === loadMoreButton);
-
-              if (!document.body.contains(loadMoreButton)) {
-                   GM_log("Pack Filler Pro: Load More button removed from DOM. Assuming end of content. Disconnecting observer.");
-                   resolve(); // Use the modified resolve
-                   return;
-              }
-
-              if (buttonEntry && buttonEntry.isIntersecting) {
-                   const isButtonVisibleAndEnabled = loadMoreButton.offsetParent !== null && !loadMoreButton.disabled;
-                   if (isButtonVisibleAndEnabled) {
-                        GM_log(`Pack Filler Pro: Load More button intersected. Scrolling (${scrollAttempts + 1}/${maxAttempts}).`);
-                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                        scrollAttempts++;
-                        if (scrollAttempts >= maxAttempts) {
-                             GM_log(`Pack Filler Pro: Reached max scroll attempts (${maxAttempts}) with IntersectionObserver. Disconnecting observer.`);
-                             resolve(); // Use the modified resolve
-                        }
-                        resetSafetyTimeout();
-                   } else {
-                        GM_log("Pack Filler Pro: Load More button is intersecting but not visible or is disabled. Assuming end of content. Disconnecting observer.");
-                        resolve(); // Use the modified resolve
-                   }
-              }
-         };
-
-    });
-}
-
-/**
- * Loads the full page using programmatic scrolling and polling for height/input changes (fallback).
- * @param {object} config - The script's configuration object.
- * @returns {Promise<void>} A promise that resolves when loading is deemed complete.
- */
-async function loadWithScrollPolling(config) {
-     GM_log("Pack Filler Pro: Using scroll polling fallback.");
-     const scrollDelay = 300; // ms to wait after each scroll
-     const scrollCheckIterations = 20; // Number of times to check for height/input change after a scroll
-     const scrollCheckInterval = 100; // ms between height/input checks
-     const maxScrollAttempts = 200; // Safety break for excessive scrolling
-
-     let lastHeight = 0;
-     let currentHeight = document.body.scrollHeight;
-     let lastInputCount = 0; // Track input count to detect loading
-     let currentInputCount = getPackInputs().length;
-     let scrollAttempts = 0;
-     const initialInputCount = currentInputCount; // Capture initial count for auto-fill check
-
-     // Initial short wait for page elements to render
-     await new Promise(resolve => setTimeout(resolve, 500));
-     currentHeight = document.body.scrollHeight; // Update height after initial wait
-     currentInputCount = getPackInputs().length; // Update input count
-
-
-     while (scrollAttempts < maxScrollAttempts) {
+    while (scrollAttempts < maxScrollAttempts) {
          lastHeight = currentHeight;
-         lastInputCount = currentInputCount;
 
-         // Scroll to the bottom of the page
-         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+         // Scroll to the bottom of the page. Use smooth scrolling if enabled in config.
+         window.scrollTo({ top: document.body.scrollHeight, behavior: config.scrollToBottomAfterLoad ? 'smooth' : 'auto' });
+
 
          let contentIncreased = false;
-         // Wait and check height AND input count multiple times
+         let currentInputCount = getPackInputs().length; // Get input count after scrolling
+         // Wait and check height/input count multiple times as new content might load in chunks
          for(let i = 0; i < scrollCheckIterations; i++) {
-             await new Promise(resolve => setTimeout(resolve, scrollCheckInterval));
-             currentHeight = document.body.scrollHeight;
-             currentInputCount = getPackInputs().length; // Check input count again
+              await new Promise(resolve => setTimeout(resolve, scrollCheckInterval));
+              const newHeight = document.body.scrollHeight;
+              const newInputCount = getPackInputs().length;
 
-             if (currentHeight > lastHeight || currentInputCount > lastInputCount) {
-                 contentIncreased = true;
-                 GM_log(`Pack Filler Pro: Polling detected content increase (Height: ${currentHeight - lastHeight}, Inputs: ${currentInputCount - lastInputCount}) in scroll attempt ${scrollAttempts}.`);
-                 break; // Content increased, likely loaded more, break inner loop and check again
-             }
+              // Check if either height or the number of inputs has increased
+              if (newHeight > currentHeight || newInputCount > currentInputCount) {
+                   // GM_log(`Pack Filler Pro: Polling detected content increase (Height: ${newHeight}, Inputs: ${newInputCount}) in scroll attempt ${scrollAttempts}, check ${i}.`); // Too chatty
+                   currentHeight = newHeight; // Update current height
+                   currentInputCount = newInputCount; // Update current input count
+                   contentIncreased = true;
+
+                   // Break the inner loop as soon as an increase is detected
+                   break;
+              }
          }
 
          scrollAttempts++;
 
-         // Break if neither height nor input count increased after checks
+         // Break the main loop if content (height or input count) hasn't increased after checks
          if (!contentIncreased) {
              GM_log(`Pack Filler Pro: Polling: Page height and input count did not increase after ${scrollCheckIterations} checks in scroll attempt ${scrollAttempts}. Final height: ${currentHeight}, Final Inputs: ${currentInputCount}. Stopping scroll.`);
-             break;
+             break; // Stop the main while loop
          }
 
-         // Check for a Load More button as an alternative end condition, even in polling
-         const loadMoreButton = document.querySelector('.load-more-btn');
-         if (loadMoreButton && (!loadMoreButton.offsetParent || loadMoreButton.disabled)) {
-              GM_log("Pack Filler Pro: Polling detected Load More button is now hidden or disabled. Assuming end of content.");
+         // Check for a Load More button as an alternative end condition
+         // '.load-more-btn' class might indicate an explicit load button exists on the page.
+         // If it's present but no longer visible or is disabled, assume end of content.
+          const loadMoreButton = document.querySelector('.load-more-btn');
+          if (loadMoreButton && (!loadMoreButton.offsetParent || loadMoreButton.disabled)) {
+              GM_log("Pack Filler Pro: Load More button is now hidden or disabled. Assuming end of content.");
               break;
-         }
+          }
 
          // Add a general delay between scrolls if content did increase
          await new Promise(resolve => setTimeout(resolve, scrollDelay));
-     }
+    }
 
-     if (scrollAttempts >= maxScrollAttempts) {
-         GM_log(`Pack Filler Pro: Polling reached max scroll attempts (${maxScrollAttempts}). Stopping auto-load.`);
-     }
+    if (scrollAttempts >= maxScrollAttempts) {
+        GM_log(`Pack Filler Pro: Polling reached max scroll attempts (${maxScrollAttempts}). Stopping auto-load.`);
+    }
 
-     // Trigger auto-fill if enabled AFTER loading is complete
-     const finalInputCount = getPackInputs().length;
-     if (config.autoFillLoaded && finalInputCount > initialInputCount) {
-         GM_log(`Pack Filler Pro: Polling finished, new inputs loaded (${finalInputCount - initialInputCount}). Triggering final auto-fill.`);
-         // Small delay before filling to ensure inputs are fully rendered/interactive
-         setTimeout(() => {
-             fillPacks(config, true); // Pass config and isAutoFill=true
-         }, 100);
-     } else if (config.autoFillLoaded && finalInputCount === initialInputCount && finalInputCount > 0) {
-         // If auto-fill is enabled but no *new* inputs loaded, maybe fill the initial ones if they weren't?
-         // Let's stick to filling only newly loaded inputs when autoFillLoaded is true.
-         GM_log("Pack Filler Pro: Polling finished, no new inputs loaded. Auto-fill skipped.");
-     }
+    // Trigger auto-fill if enabled AFTER loading is complete and if fillPacks is available
+    const finalInputCount = getPackInputs().length;
+    GM_log(`Pack Filler Pro: Full page auto-load process finished. Final visible input count after load: ${finalInputCount}.`);
 
-     // The promise resolves implicitly when the async function finishes.
+    // Only trigger auto-fill if enabled, if fillPacks function exists, and if any inputs were found (either initially or after loading)
+    if (config.autoFillLoaded && typeof fillPacks === 'function' && finalInputCount > 0) {
+        GM_log(`Pack Filler Pro: Auto-fill loaded enabled. Triggering fillPacks for ${finalInputCount} inputs.`);
+        // Small delay before filling to ensure inputs are fully rendered/interactive
+        setTimeout(() => {
+            fillPacks(config, true); // Pass config and isAutoFill=true
+        }, 100); // 100ms delay
+
+    } else {
+        GM_log("Pack Filler Pro: Auto-fill loaded is disabled, fillPacks function not found, or no inputs were found. Auto-fill skipped.");
+        // Optional: Show a final toast message if auto-fill didn't run
+         if (typeof SWAL_TOAST === 'function') {
+              if (finalInputCount > initialInputCount) {
+                   SWAL_TOAST(`Auto-load complete. Found ${finalInputCount - initialInputCount} additional packs.`, 'success', config); // Pass config to SWAL
+              } else if (initialInputCount > 0) {
+                   SWAL_TOAST(`Auto-load finished. Found ${initialInputCount} packs initially.`, 'info', config); // Pass config to SWAL
+              } else {
+                   // Check if any inputs exist at all (even hidden ones) using the selector
+                   if ($(SELECTOR).length === 0) {
+                        SWAL_TOAST('No pack inputs found on the page.', 'info', config); // Pass config to SWAL
+                   } else {
+                        SWAL_TOAST("Auto-load finished. Found packs.", 'info', config); // Pass config to SWAL
+                   }
+              }
+         } else {
+              GM_log("Pack Filler Pro: SWAL_TOAST function not found for auto-load feedback.");
+         }
+    }
 }
 
 
 // The function loadFullPageIfNeeded is made available to the main script's scope via @require.
-// loadWithIntersectionObserver and loadWithScrollPolling are internal helpers.
-
+// loadWithIntersectionObserver and loadWithScrollPolling are internal helpers (polling logic is within loadFullPageIfNeeded now).
